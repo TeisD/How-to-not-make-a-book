@@ -1,7 +1,7 @@
 import config
-import cv2
 import gphoto2 as gp
 import helpers
+from PIL import Image
 import pyocr
 import serial
 from serial.tools import list_ports
@@ -65,10 +65,21 @@ class Printer:
         except IndexError:
             print_fail('No OCR libraries installed.')
 
-    def capture(self):
-        file_path = gp.check_result(gp.gp_camera_capture(self.camera, gp.GP_CAPTURE_IMAGE, self.context))
-        #print('Camera file path: {0}/{1}'.format(file_path.folder, file_path.name))
-        camera_file = gp.check_result(gp.gp_camera_file_get(self.camera, file_path.folder, file_path.name, gp.GP_FILE_TYPE_NORMAL, self.context))
-        filename = time.strftime('%Y%m%d_%H%M%S') + '.jpg'
-        gp.check_result(gp.gp_file_save(camera_file, filename))
-        return cv2.imread(filename)
+    def capture(self, number):
+        """Capture a page
+
+        number -- An integer representing the current page number
+        """
+        if not config.DEBUGGING:
+            file_path = gp.check_result(gp.gp_camera_capture(self.camera, gp.GP_CAPTURE_IMAGE, self.context))
+            #print('Camera file path: {0}/{1}'.format(file_path.folder, file_path.name))
+            camera_file = gp.check_result(gp.gp_camera_file_get(self.camera, file_path.folder, file_path.name, gp.GP_FILE_TYPE_NORMAL, self.context))
+            filename = number + '.jpg'
+            gp.check_result(gp.gp_file_save(camera_file, filename))
+        else:
+            filename = 'debug.jpg'
+        im = Image.open(filename).convert('RGB')
+        # rotate image counter-clockwise if necesary
+        if(im.size[0] > im.size[1]):
+            im = im.rotate(90, expand=1)
+        return im

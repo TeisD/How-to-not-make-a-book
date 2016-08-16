@@ -1,1 +1,1 @@
-DEBUGGING = 0;
+DEBUGGING = 1;

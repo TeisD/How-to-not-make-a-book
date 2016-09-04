@@ -1,9 +1,11 @@
+import config
 from page import Page
 from printer import Printer
 from job import Job
+from gui import Gui
 import helpers
 
-import sys, getopt
+import os, sys, getopt, time
 
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
@@ -15,13 +17,14 @@ def main(argv):
     Arguments:
     -h --help -- show usage
     -l --list -- list all jobs
+    -c --calibrate -- calibrate the plotter
     -n --new {file} -- start a new job and print the text from {file}
     -r --resume {job} -- resume a job"""
 
     job = None
 
     try:
-        opts, args = getopt.getopt(argv[1:],"hln:r:",["help","list","new=","resume="])
+        opts, args = getopt.getopt(argv[1:],"hlcn:r:",["help","list","calibrate","new=","resume="])
         if not opts:
             raise getopt.GetoptError('No arguments given')
     except getopt.GetoptError:
@@ -34,9 +37,18 @@ def main(argv):
         elif opt in('-l', '--list'):
             print('todo')
             sys.exit()
+        elif opt in('-c', '--calibrate'):
+            if(os.path.isfile(config.CALIBRATION_PATH)):
+                os.rename(config.CALIBRATION_PATH, config.CALIBRATION_PATH[:-4]+'_'+time.strftime('%Y%m%d_%H%M%S')+'.txt')
+            printer = Printer()
+            printer.init()
+            sys.exit()
         elif opt in ("-n", "--new"):
-            job = Job(arg)
-            # naam voor de job ingeven!
+            name = raw_input("Job name: ")
+            print('Select a mode for the job. Options are:')
+            print('todo: options')
+            mode = raw_input("Job mode: ")
+            job = Job(name, Job.Mode.H_CHAR, arg)
             break
         elif opt in ("-r", "--resume"):
             print(todo)
@@ -44,6 +56,18 @@ def main(argv):
 
     printer = Printer()
     printer.init()
+    gui = Gui()
+
+    while True:
+        page = Page(printer.capture(), printer.getOcr(), job.getLanguage())
+        gui.setOriginal(page.getImageOriginal())
+        gui.setProcessed(page.getImageProcessed())
+        matches = job.process(page)
+        gui.plot(matches)
+        printer.plotList(matches)
+        printer.home()
+        raw_input("Please turn the page and press enter to continue...")
+
 
 
 

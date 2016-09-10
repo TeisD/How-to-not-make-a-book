@@ -43,6 +43,11 @@ def print_help():
     print '-n --new {file} : start a new job and print the text from {file}'
     print '-r --resume {job} : resume a job'
 
+def print_modes():
+    cprint('Modes:', attrs=['bold'])
+    print('[1] CIRCLE print file.txt and hightlight matching characters with a circle')
+    print('[2] NEWSPAPER loop through file.txt and erase all non-matching characters')
+
 ## TRANSFORM COORDINATES ##
 ## from http://elonen.iki.fi/code/misc-notes/affine-fit/ ##
 def affine_fit( from_pts, to_pts ):

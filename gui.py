@@ -16,14 +16,13 @@ class Gui:
 
     def plot(self, instructions):
         """Generate a preview on the image. Watch out! pyocr coordinates are left top(x,y) right bottom(x,y) in a bottom-left coordinate system, PIL uses a top-left system"""
-        h = self.processed_img.size[1]
         draw = ImageDraw.Draw(self.processed_img)
         for i in instructions:
             print(i)
             if i[0] == "line":
-                draw.line([i[1][0], h-i[1][1], i[2][0], h-i[2][1]], fill="red", width=2)
+                draw.line([i[1][0], i[1][1], i[2][0], i[2][1]], fill="red", width=2)
             elif i[0] == "circle":
-                draw.ellipse([i[1][0]-i[2], h-i[1][1]-i[2], i[1][0]+i[2], h-i[1][1]+i[2]], outline="red")  # left top right bottom of enclosing rectangle
+                draw.ellipse([i[1][0]-i[2], i[1][1]-i[2], i[1][0]+i[2], i[1][1]+i[2]], outline="red")  # left top right bottom of enclosing rectangle
             elif i[0] == "box":
                 draw.rectangle([i[1], i[2]], fill="red")
         self.update()

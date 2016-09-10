@@ -15,13 +15,17 @@ class Job:
         Mode arguments:
         match -- boolean to compare to when matching needles
         action -- action to exectue when generating plotter instructions
-
         """
+
         Mode = namedtuple('Mode', 'match action')
 
-        H_CHAR = Mode(match=True, action='stroke')
-        H_WORD = Mode(match=True, action='strikethrough')
-        B_WORD = Mode(match=False, action='strikethrough')
+        CIRCLE = Mode(match=True, action='stroke')
+        NEWSPAPER = Mode(match=True, action='strikethrough')
+
+        def get(id):
+            if id == 1 return CIRCLE
+            elif id == 2 return NEWSPAPER
+            else return None
 
     def __init__(self, name, mode, path, lang = 'nld', index = 0):
         """Create a new page
@@ -38,6 +42,7 @@ class Job:
         self.lang = lang
         self.index = index
         self.text = open(path, 'r')
+        self.height = 0
 
         ## Todo: create a file to keep the progress (json? see http://stackoverflow.com/questions/19078170/python-how-would-you-save-a-simple-settings-config-file)
 
@@ -47,6 +52,8 @@ class Job:
 
         Keyword arguments:
         page -- the Page object to process"""
+
+        self.height = page.getImageProcessed().size[1]
 
         haystack = page.getCharacters()
         needle = self.text.read(1)
@@ -80,7 +87,7 @@ class Job:
             if newline is False and c.match(needle) is self.mode.match:
                 if prev_match:
                     prev_c = matches[-1]
-                    merged_c = Character([prev_c.getText() + c.getText(), prev_c.getLeft(), max(prev_c.getTop(), c.getTop()), c.getRight(), max(prev_c.getBottom(), c.getBottom())], True) #make a new character containing the previous data
+                    merged_c = Character([prev_c.getText() + c.getText(), prev_c.getLeft(), max(prev_c.getTop(), self.height - c.getTop()), c.getRight(), max(prev_c.getBottom(), self.height - c.getBottom())], True) #make a new character containing the previous data
                     instructions.pop() #remove the last instruction
                     matches.pop() #remove the last match
                     matches.append(merged_c)
@@ -96,10 +103,10 @@ class Job:
             #check for spaces
             if next_c.getLeft() > c.getRight() + avg[0] or next_c.getLeft() < c.getRight():
                 if needle == ' ' or needle == '.' or needle == '\n':
-                    instructions.append(["line", (c.getRight() + avg[0]/2, c.getBottom() + (2*avg[1])), (c.getRight() + avg[0]/2, c.getBottom() - avg[1])])
+                    instructions.append(["line", (c.getRight() + avg[0]/2, self.height - (c.getBottom() + (2*avg[1]))), (c.getRight() + avg[0]/2, self.height - (c.getBottom() - avg[1]))])
                     needle = self.text.read(1)
                 if needle == ' ' or needle == '.' or needle == '\n':
-                    instructions.append(["line", (c.getRight() + avg[0], c.getBottom() + (2*avg[1])), (c.getRight() + avg[0], c.getBottom() - avg[1])])
+                    instructions.append(["line", (c.getRight() + avg[0], self.height - (c.getBottom() + (2*avg[1]))), (c.getRight() + avg[0], self.height - (c.getBottom() - avg[1]))])
                     needle = self.text.read(1)
                 while needle == ' ' or needle == '.' or needle == '\n': #skip coming newlines, dots and spaces
                     needle = self.text.read(1)
@@ -121,11 +128,11 @@ class Job:
         box -- the Box object containing the character or the word to process"""
 
         if self.mode.action == 'stroke':
-            return ["circle", (box.getLeft() + box.getWidth()/2, box.getBottom() + box.getHeight()/2), max(box.getHeight(), box.getWidth())/2 + config.MARGIN] # ["circle", (center), radius]
+            return ["circle", (box.getLeft() + box.getWidth()/2, self.height -  (box.getBottom() + box.getHeight()/2)), max(box.getHeight(), box.getWidth())/2 + config.MARGIN] # ["circle", (center), radius]
         if self.mode.action == 'strikethrough':
-            return ["line", (box.getLeft(), box.getBottom() + box.getHeight()/2), (box.getRight(), box.getBottom() + box.getHeight()/2)] # ["line", (start), (end)]
+            return ["line", (box.getLeft(), self.height - (box.getBottom() + box.getHeight()/2)), (box.getRight(), self.height - (box.getBottom() + box.getHeight()/2))] # ["line", (start), (end)]
         if self.mode.action == 'fill':
-            return ["box", (box.getLeft(), box.getBottom()), (box.getRight(), box.getTop())] # ["box", (topleft), (bottomright)]
+            return ["box", (box.getLeft(), self.height - box.getBottom()), (box.getRight(), self.height - box.getTop())] # ["box", (topleft), (bottomright)]
 
 
     def getAverage(self, boxes):

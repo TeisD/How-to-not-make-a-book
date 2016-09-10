@@ -157,8 +157,8 @@ class Printer:
         c -- a coordinate Tuple close to point d"""
 
         start = self.convert.transform(c)[0]
-        end = self.convert.transform((c[0]+d, c[1]))[0]
-        return round(end - start, 2)
+        end = self.convert.transform((c[0]+d, c[1]+d))[0]
+        return abs(round(end - start, 2))
 
     def plotList(self, instructions):
         """Plot a list of instructions
@@ -209,7 +209,7 @@ class Printer:
 
         r -- an integer describing the radius"""
 
-        self.go((self.currentPosition[0]-r, self.currentPosition[1])) # go to a place on the circle
+        self.go((self.currentPosition[0] - r, self.currentPosition[1])) # go to a place on the circle
         self.on()
         self.send('G2 X{0} Y{1} I{2}'.format(self.currentPosition[0], self.currentPosition[1], r)) # make a full circle
         self.off()

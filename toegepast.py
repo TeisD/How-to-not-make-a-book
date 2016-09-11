@@ -45,11 +45,8 @@ def main(argv):
             sys.exit()
         elif opt in ("-n", "--new"):
             name = raw_input("Job name: ")
-            helpers.print_modes()
-            mode = None
-            while mode != None
-                mode = Job.Mode.get(raw_input("Job mode: "))
-            job = Job(name, Job.Mode.H_CHAR, arg, 'eng')
+            lang = raw_input("Job language (nld/eng): ")
+            job = Job(lang)
             break
         elif opt in ("-r", "--resume"):
             print(todo)

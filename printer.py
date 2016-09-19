@@ -176,12 +176,11 @@ class Printer:
             ["arc", (center x, center y), radius]
             ["box", (left, bottom), (right, top)]"""
 
-        if instruction[0] == 'line':
-            self.go(self.convertCoordinate((instruction[1][0], instruction[1][1])))
-            self.line(self.convertCoordinate((instruction[2][0], instruction[2][1])))
-        elif instruction[0] == 'circle':
-            self.go(self.convertCoordinate((instruction[1][0], instruction[1][1])))
-            self.circle(self.convertDistance((instruction[1][0], instruction[1][1]), instruction[2]))
+        self.go(self.convertCoordinate(instruction.start))
+        if(instruction.type == "line"):
+            self.line(self.convertCoordinate(instruction.end))
+        elif instruction.type == 'circle':
+            self.circle(self.convertDistance(instruction.start, instruction.radius))
 
     def go(self, c):
         """Go to a point

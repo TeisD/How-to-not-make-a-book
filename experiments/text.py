@@ -122,6 +122,8 @@ y = 300;
 
 #abc()
 
+print data;
+
 string(text)
 
 turtle.done()

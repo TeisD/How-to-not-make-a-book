@@ -45,10 +45,13 @@ def main(argv):
             printer.init()
             sys.exit()
         elif opt in ("-n", "--new"):
-            name = raw_input("Job name: ")
+            #name = raw_input("Job name: ")
+            name = "test"
             helpers.print_modes()
-            mode = raw_input("Job mode: ")
-            lang = raw_input("Job language (nld/eng): ")
+            #mode = raw_input("Job mode: ")
+            mode = 3
+            #lang = raw_input("Job language (nld/eng): ")
+            lang = 'eng'
             #job = jobs.Cookbook(name, mode, lang, "test")
             job = Job(name, Job.get_processor(mode), lang)
             break
@@ -65,8 +68,8 @@ def main(argv):
         gui.setOriginal(page.getImageOriginal())
         gui.setProcessed(page.getImageProcessed())
         instructions = job.process(page)
-        threading.Thread(gui.plot(instructions))
-        threading.Thread(printer.plotList(instructions))
+        gui.plot(instructions)
+        printer.plotList(instructions)
         printer.home()
         raw_input("Please turn the page and press enter to continue...")
 

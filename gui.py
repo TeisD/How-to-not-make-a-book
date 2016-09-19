@@ -4,7 +4,6 @@ from PIL import Image, ImageDraw
 class Gui:
 
     def __init__(self):
-        plt.ion() # turn on non-blocking interactive mode
         self.fig = plt.figure(figsize=(20,10))
         self.original = self.fig.add_subplot(1, 2, 1)
         self.original.set_title("Original page")
@@ -36,8 +35,7 @@ class Gui:
         self.update()
 
     def update(self):
-        plt.ioff()
         self.original.imshow(self.original_img, interpolation='sinc')
         self.processed.imshow(self.processed_img, interpolation='sinc')
         plt.draw()
-        plt.ion()
+        plt.show()

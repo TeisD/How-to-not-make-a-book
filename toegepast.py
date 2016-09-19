@@ -1,8 +1,8 @@
 import config
 from page import Page
 from printer import Printer
-from job import Job
 from gui import Gui
+from job import Job
 import helpers
 
 import os, sys, getopt, time
@@ -10,6 +10,7 @@ import os, sys, getopt, time
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import numpy as np
+import threading
 
 def main(argv):
     """Print a book!
@@ -18,13 +19,13 @@ def main(argv):
     -h --help -- show usage
     -l --list -- list all jobs
     -c --calibrate -- calibrate the plotter
-    -n --new {file} -- start a new job and print the text from {file}
+    -n --new -- start a new job
     -r --resume {job} -- resume a job"""
 
     job = None
 
     try:
-        opts, args = getopt.getopt(argv[1:],"hlcn:r:",["help","list","calibrate","new=","resume="])
+        opts, args = getopt.getopt(argv[1:],"hlcnr:",["help","list","calibrate","new","resume="])
         if not opts:
             raise getopt.GetoptError('No arguments given')
     except getopt.GetoptError:
@@ -45,11 +46,14 @@ def main(argv):
             sys.exit()
         elif opt in ("-n", "--new"):
             name = raw_input("Job name: ")
+            helpers.print_modes()
+            mode = raw_input("Job mode: ")
             lang = raw_input("Job language (nld/eng): ")
-            job = Job(lang)
+            #job = jobs.Cookbook(name, mode, lang, "test")
+            job = Job(name, Job.get_processor(mode), lang)
             break
         elif opt in ("-r", "--resume"):
-            print(todo)
+            print("todo")
             break
 
     printer = Printer()
@@ -60,9 +64,9 @@ def main(argv):
         page = Page(printer.capture(), printer.getOcr(), job.getLanguage())
         gui.setOriginal(page.getImageOriginal())
         gui.setProcessed(page.getImageProcessed())
-        matches = job.process(page)
-        gui.plot(matches)
-        printer.plotList(matches)
+        instructions = job.process(page)
+        threading.Thread(gui.plot(instructions))
+        threading.Thread(printer.plotList(instructions))
         printer.home()
         raw_input("Please turn the page and press enter to continue...")
 

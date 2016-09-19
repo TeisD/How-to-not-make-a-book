@@ -2,21 +2,13 @@ from bs4 import BeautifulSoup
 from requests import get
 import urllib
 from disqusapi import DisqusAPI
-import re
 import json
 from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from threading import Thread
-from googleapiclient.discovery import build
-
-google_api_key = "AIzaSyDuV5zNTz8T7jwKf6X6MVDfjZQoDN1PQ6g"
-google_cse_id = "011263252709623880646:fr2q4yl60bo"
 
 disqus_secret_key = 'gEsLGMfIJ2Wy8Ft2nE84ANSoIJ61kLmNRQlRukgHEwfGb69ngZnRbyAhzPyeZv2G'
 disqus_public_key = '7JIzndWon2HyoEnL8LUyaAIBLaDS8323wQ3qgbbAEPh3Hn4Ywgb3Cl04kJaWhmDW'
 
+print("Starting webdriver...")
 driver = webdriver.Firefox() # or add to your PATH
 driver.implicitly_wait(5) # seconds
 
@@ -45,8 +37,11 @@ def disqus(soup, url):
                     disqus_id = clean.replace(" ", "")[1:-1]
 
     if disqus_id != None:
-        result = get('https://disqus.com/api/3.0/threads/listPosts.json?api_key='+disqus_public_key+'&thread=link:'+urllib.quote(url)+'&forum='+disqus_id)
-        comments = result.content
+        results = json.loads(get('https://disqus.com/api/3.0/threads/listPosts.json?api_key='+disqus_public_key+'&thread=link:'+urllib.quote(url)+'&forum='+disqus_id).content)["response"]
+        if len(results) > 0:
+            comments = []
+            for comment in results:
+                comments.append(comment["raw_message"])
 
     return comments
 
@@ -67,9 +62,15 @@ def scrape(soup):
         for comment in comments:
             if "http" in str(comment): comments.remove(comment)
 
-    if comments is None: return comments
-    elif len(comments) > 0: return comments
-    else: return None
+    if comments is not None:
+        if len(comments) > 0:
+            ret_comments = []
+            for comment in comments:
+                ret_comments.append(comment.text)
+            return ret_comments
+        else: return None
+
+    return comments
 
 def deep(url):
     print "DEEP"
@@ -89,12 +90,20 @@ def deep(url):
     return comments
 
 def search(keyword, tries):
-    #http://stackoverflow.com/questions/37083058/programmatically-searching-google-in-python-using-custom-search
-    url = 'https://www.googleapis.com/customsearch/v1?key={0}&cx={1}&q={2}&num={3}&fields=items(link)'.format(google_api_key, google_cse_id, keyword, tries)
-    return json.loads(get(url).content)['items']
+    results = []
+    driver.get("https://www.google.com/search?q="+urllib.quote_plus(keyword))
+    matches = driver.find_elements_by_css_selector('h3.r a')
+    for match in matches:
+        # get rid of pinterest
+        link = match.get_attribute("href")
+        if "pinterest" not in link: results.append(link)
+        #match = match.find('a').get('href')[7:]
+        #results.append(match[:match.index("&sa=")])
+
+    return results[:tries]
 
 def get_comments(url):
-    site = get(url, timeout = 5)
+    site = get(url, timeout = 2)
     soup = BeautifulSoup(site.content, 'html.parser')
 
     comments = disqus(soup, url)
@@ -102,15 +111,20 @@ def get_comments(url):
     if comments is None: comments = deep(url)
     return comments
 
-recipes = ["chicken tikka lentil, spinach & naam salad", "spicy cajun chicken smashed sweet potato & fresh corn salsa", "pork steaks hungarian pepper sauce & rice", "morrocan mussels tapenade toasties & cucumber salad"]
+recipes = ["blackened chicken & quinoa salad", "chicken tikka lentil, spinach & naam salad", "spicy cajun chicken smashed sweet potato & fresh corn salsa", "pork steaks hungarian pepper sauce & rice", "morrocan mussels tapenade toasties & cucumber salad"]
 
 for recipe in recipes:
+    comments = []
+    count = 0
     print("Searching for: {0}").format(recipe)
-    blogs = search(recipe, 3)
+    blogs = search(recipe, 5)
     for blog in blogs:
-        comments = get_comments(blog['link'])
-        if comments is not None:
-            print comments
-            break
+        blog_comments = get_comments(blog)
+        if blog_comments is not None:
+            print("Found {0} comments.").format(len(blog_comments))
+            count += len(blog_comments)
+            comments.append({"site": blog, "comments": blog_comments})
+            if(count > 3): break #always fetch 3 comments
+    print comments
 
 driver.quit()

@@ -22,6 +22,9 @@ class Page:
         self.lang = lang
         self.characters = None
         self.words = None
+        self.text = None
+        self.lower_tresh = 152
+        self.upper_tresh = 255
 
     def getImageOriginal(self):
         return self.imageOriginal
@@ -31,15 +34,23 @@ class Page:
             self.process()
         return self.imageProcessed
 
+    def setImageOriginal(self, image):
+        self.imageOriginal = image
+
     def getCharacters(self):
         if self.characters is None:
             self.characters = self.performOcr(pyocr.tesseract.CharBoxBuilder())
         return self.characters
 
     def getWords(self):
-        if self.characters is None:
-            self.characters = self.performOcr(pyocr.builders.WordBoxBuilder())
-        return self.characters
+        if self.words is None:
+            self.words = self.performOcr(pyocr.builders.WordBoxBuilder())
+        return self.words
+
+    def getText(self):
+        if self.text is None:
+            self.text = self.performOcr(pyocr.builders.TextBuilder())
+        return self.text
 
     def performOcr(self, builder):
         """ Perform Optical Character Recognition and return the array of characters, words or lines
@@ -49,7 +60,11 @@ class Page:
 
         if config.DEBUGGING:
             print("Performing OCR...")
-        ret = self.ocr.image_to_string(self.getImageProcessed(), self.lang, builder = builder)
+        ret = self.ocr.image_to_string(
+            self.getImageProcessed(),
+            lang = self.lang,
+            builder = builder
+        )
         if config.DEBUGGING:
             print("OCR done!")
         return ret
@@ -59,7 +74,7 @@ class Page:
         # convert from PIL to grayscale cv2
         image_cv = cv2.cvtColor(np.array(self.imageOriginal), cv2.COLOR_RGB2GRAY)
         # clean
-        ret,image_cv = cv2.threshold(image_cv,152,255,cv2.THRESH_BINARY)
+        ret,image_cv = cv2.threshold(image_cv,self.lower_tresh,self.upper_tresh,cv2.THRESH_BINARY)
         # convert back to PIL
         self.imageProcessed = Image.fromarray(cv2.cvtColor(image_cv, cv2.COLOR_GRAY2RGB))
         # do OCR

@@ -10,6 +10,7 @@ import os, sys, getopt, time
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import numpy as np
+import pickle
 import threading
 
 def main(argv):
@@ -25,7 +26,7 @@ def main(argv):
     job = None
 
     try:
-        opts, args = getopt.getopt(argv[1:],"hlcnr:",["help","list","calibrate","new","resume="])
+        opts, args = getopt.getopt(argv[1:],"hlcn:r:",["help","list","calibrate","new=","resume="])
         if not opts:
             raise getopt.GetoptError('No arguments given')
     except getopt.GetoptError:
@@ -45,32 +46,46 @@ def main(argv):
             printer.init()
             sys.exit()
         elif opt in ("-n", "--new"):
-            #name = raw_input("Job name: ")
-            name = "test"
+            name = arg
+            if(os.path.isfile('jobs/'+name+'.conf')):
+                i = raw_input("Job already exists. Overwrite [Y/N]? ")
+                if i.lower() != 'y': sys.exit()
             helpers.print_modes()
             #mode = raw_input("Job mode: ")
             mode = 3
             #lang = raw_input("Job language (nld/eng): ")
             lang = 'eng'
-            #job = jobs.Cookbook(name, mode, lang, "test")
+            printer = Printer()
+            printer.init()
             job = Job(name, Job.get_processor(mode), lang)
+            page = Page(printer.capture(), printer.getOcr(), job.get_language())
+            properties = job.init(page)
+            with open('jobs/' + name + '.conf', 'wb') as f:
+                pickle.dump(properties, f, pickle.HIGHEST_PROTOCOL)
             break
         elif opt in ("-r", "--resume"):
-            print("todo")
+            if(os.path.isfile('jobs/' + arg + '.conf')):
+                with open('jobs/' + arg + '.conf', 'rb') as f:
+                    p = pickle.load(f)
+                    printer = Printer()
+                    printer.init()
+                    job = Job(p['name'], Job.get_processor(p['processor']), p['lang'])
+                    job.processor.set_properties(p['processor_properties'])
+            else:
+                helpers.print_fail("Job does not exist.")
+                sys.exit()
             break
 
-    printer = Printer()
-    printer.init()
-    gui = Gui()
+    #gui = Gui()
 
     while True:
-        page = Page(printer.capture(), printer.getOcr(), job.getLanguage())
-        gui.setOriginal(page.getImageOriginal())
-        gui.setProcessed(page.getImageProcessed())
+        page = Page(printer.capture(), printer.getOcr(), job.get_language())
+        #gui.setOriginal(page.getImageOriginal())
+        #gui.setProcessed(page.getImageProcessed())
         instructions = job.process(page)
-        gui.plot(instructions)
-        printer.plotList(instructions)
-        printer.home()
+        #gui.plot(instructions)
+        #printer.plotList(instructions)
+        #printer.home()
         raw_input("Please turn the page and press enter to continue...")
 
 

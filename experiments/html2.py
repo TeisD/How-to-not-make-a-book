@@ -9,7 +9,7 @@ disqus_secret_key = 'gEsLGMfIJ2Wy8Ft2nE84ANSoIJ61kLmNRQlRukgHEwfGb69ngZnRbyAhzPy
 disqus_public_key = '7JIzndWon2HyoEnL8LUyaAIBLaDS8323wQ3qgbbAEPh3Hn4Ywgb3Cl04kJaWhmDW'
 
 print("Starting webdriver...")
-driver = webdriver.Firefox() # or add to your PATH
+driver = webdriver.Chrome('/usr/lib/chromedriver') # or add to your PATH
 driver.implicitly_wait(5) # seconds
 
 #url = "http://www.jamieoliver.com/recipes/chicken-recipes/blackened-chicken/" #jamieoliver.com

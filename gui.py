@@ -22,6 +22,8 @@ class Gui:
                 draw.line([i.start, i.end], fill="red", width=2)
             elif i.type == "circle":
                 draw.ellipse([i[1][0]-i[2], i[1][1]-i[2], i[1][0]+i[2], i[1][1]+i[2]], outline="red")  # left top right bottom of enclosing rectangle
+            elif i.type == "rect":
+                draw.rectangle([i.start, i.end], outline="red")  # left top right bottom of enclosing rectangle
         self.update()
 
     def setOriginal(self, image):

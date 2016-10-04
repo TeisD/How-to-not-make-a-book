@@ -22,15 +22,26 @@ class Job:
 
         Keyword arguments:
         name -- The name of the job
-        path -- Path to the text file to be printed
-        mode -- A dictionary containing the instructions for processing
-        index -- The location of the current character/word/line"""
+        path -- The processor to use with every the page
+        lang -- The language of the job"""
 
         self.name = name
         self.processor = processor
         self.lang = lang
 
         ## Todo: create a file to keep the progress (json? see http://stackoverflow.com/questions/19078170/python-how-would-you-save-a-simple-settings-config-file)
+
+    def init(self, page):
+        self.processor.init(page)
+
+        properties = {
+            'name': self.name,
+            'lang': self.lang,
+            'processor': self.processor.mode,
+            'processor_properties': self.processor.get_properties()
+        }
+
+        return properties
 
     def process(self, page):
         return self.processor.process(page)
@@ -40,8 +51,8 @@ class Job:
         Keyword arguments:
         page -- the Page object to process"""
 
-    def getName(self):
+    def get_name(self):
         return self.name
 
-    def getLanguage(self):
+    def get_language(self):
         return self.lang

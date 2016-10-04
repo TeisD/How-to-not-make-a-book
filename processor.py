@@ -1,25 +1,41 @@
 import json
 import numpy as np
+import cv2
+import config
+import sys
+import cookbook
+from selenium import webdriver
 
 class Instruction(object):
 
-    def __init__(self, type, start):
+    def __init__(self, type, start, cont = False):
         self.type = type
         self.start = start
+        self.continuous = cont
 
 class Line(Instruction):
 
-    def __init__(self, start, end):
+    def __init__(self, start, end, cont = False):
         self.type = "line"
         self.start = start
         self.end = end
+        self.continuous = cont
 
 class Circle(Instruction):
 
-    def __init__(self, start, radius):
+    def __init__(self, start, radius, cont = False):
         self.type = "circle"
         self.start = start
         self.radius = radius
+        self.continuous = cont
+
+class Rect(Instruction):
+
+    def __init__(self, start, end, cont = False):
+        self.type = "rect"
+        self.start = start
+        self.end = end
+        self.continuous = cont
 
 class Box:
 
@@ -71,49 +87,93 @@ class Character(Box):
         else:
             return False
 
+""" More on Hershey font: http://ghostscript.com/doc/current/Hershey.htm """
 class Font(object):
 
     OFFSET_SPECIAL = 700
     OFFSET_CAPITALS = 500
     OFFSET_SMALL = 600
+    LINEHEIGHT = 60
+    BASELINE = -9
+    SPACE = 10
 
-    def __init__(self, scale = 2):
+    def __init__(self, scale = 1):
         with open('fonts/hershey-occidental.json') as data_file:
             self.font = json.load(data_file)
         self.scale = scale
         self.start = (0, 0)
-        self.current = self.start
+        self.box = None
+        self.current = (self.start[0], self.start[1] + self.scale*Font.BASELINE)
 
     def set_scale(self, scale):
         self.scale = scale
 
+    """Set a start position for the text
+
+    start = (top, left)"""
     def set_start(self, start):
         self.start = start
-        self.current = self.start
+        self.current = (self.start[0], self.start[1] + self.scale*Font.BASELINE)
+    def get_start(self):
+        return self.start
+
+    """Set a bounding box for the text
+
+    box = (width, height)"""
+    def set_box(self, box):
+        self.box = box
+    def get_box(self):
+        return self.box
 
     def phrase(self, p):
         instructions = []
-        for l in p:
-            print l
-            instructions += self.letter(l)
+        p = p.split()
+        for w in p:
+            #word
+            if self.box is not None: #check if it fits
+                bbox = self.get_word_box(w)
+                if(self.current[0] + bbox[0] > self.box[0]): #too large? move to new line
+                    self.current = (self.start[0], self.current[1] + Font.LINEHEIGHT)
+                    if(self.current[1] - Font.LINEHEIGHT > self.box[1]): #too large? stop
+                        return []# don't draw anything
+            for l in w:
+                print l
+                instructions += self.letter(l)
+            #whitespace
+            self.current = (self.current[0] + self.scale * Font.SPACE, self.current[1])
         return instructions
 
     def letter(self, l):
         glyph = self.glyph(self.map(l))
 
         if glyph is None:
-            self.current = (self.current[0] + self.scale * 10, self.current[1])
+            self.current = (self.current[0] + self.scale * Font.SPACE, self.current[1])
             return []
 
         instructions = []
         self.current = (self.current[0] - self.scale * glyph['left'], self.current[1])
         for line in glyph["lines"]:
+            prev_end = self.current
             for i in range(0, len(line)-1):
                 start = tuple(np.add(self.current, tuple(self.scale*x for x in tuple(line[i]))))
+                cont = (start == prev_end)
                 end = tuple(np.add(self.current, tuple(self.scale*x for x in tuple(line[i+1]))))
-                instructions.append(Line(start, end))
+                prev_end = end
+                instructions.append(Line(start, end, cont))
         self.current = (self.current[0] + self.scale * glyph['right'], self.current[1])
         return instructions
+
+    """return the dimensions of the word w
+
+    returns (width, height)"""
+    def get_word_box(self, w):
+        width = 0
+        height = 0
+        for l in w:
+            glyph = self.glyph(self.map(l))
+            width += glyph["right"] - glyph["left"] # right - left
+            height = max(height, glyph["bbox"][1][1] - glyph["bbox"][0][1]) # top - bottom
+        return (self.scale*width, self.scale*height)
 
     """ return a character from a HERSHEY character code """
     def glyph(self,c):
@@ -162,8 +222,72 @@ class Font(object):
 
 class Processor(object):
 
-    def process(page):
-        return [["circle", (50,50), 10], ["circle", (100,100), 10]]
+    def __init__(self):
+        self.bbox = []
+
+    def display(self, screen, image):
+        # keep looping until the 'q' key is pressed
+        while True:
+            # display the image and wait for a keypress
+            cv2.imshow(screen, image)
+            key = cv2.waitKey(1) & 0xFF
+            # escape or space
+            if key == 27 or key == 32:
+                break
+
+    def update(self, screen, image, points, scale = 1):
+        # draw a rectangle around the region of interest
+        for pt in points:
+            cv2.line(image, (int(pt[0]*scale), 0), (int(pt[0]*scale), image.shape[0]), (0, 0, 255))
+            cv2.line(image, (0, int(pt[1]*scale)), (image.shape[1], int(pt[1]*scale)), (0, 0, 255))
+            cv2.imshow(screen, image)
+
+    """ Initialize the processor and show a screen to select the page boundaries """
+    def init(self, page):
+        image = page.getImageOriginal()
+        image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+        image = cv2.resize(image, (0,0), fx=config.GUI_SCALE, fy=config.GUI_SCALE)
+
+        prevPt = ()
+        # define callback
+        def click(event, x, y, flags, param):
+            global prevPt
+            if(len(self.bbox) < 2):
+                # save the point where the click occurs
+                if event == cv2.EVENT_LBUTTONDOWN:
+                    prevPt = (x, y)
+                # check if it was a click, not a drag
+                elif event == cv2.EVENT_LBUTTONUP:
+                    if prevPt == (x, y):
+                        # save the coordinate
+                        self.bbox.append((int(x/config.GUI_SCALE), int(y/config.GUI_SCALE)))
+            self.update("page_bounds", image, self.bbox, config.GUI_SCALE)
+
+        # select the title region
+        cv2.namedWindow("page_bounds")
+        cv2.setMouseCallback("page_bounds", click)
+        self.display("page_bounds", image)
+        cv2.destroyWindow("page_bounds")
+
+    def process(self, page):
+        pass
+
+    def get_properties(self):
+        return {'bbox': self.bbox}
+
+    def set_properties(self, properties):
+        self.bbox = properties['bbox']
+
+    def crop(self, im, bbox = None):
+        if bbox is None:
+            bbox = self.bbox
+        left = min(bbox[0][0], bbox[1][0])
+        right = max(bbox[0][0], bbox[1][0])
+        top = min(bbox[0][1], bbox[1][1])
+        bottom = max(bbox[0][1], bbox[1][1])
+        # crop the original image
+        # NOTE: its img[y: y + h, x: x + w] and *not* img[x: x + w, y: y + h]
+        return im.crop([left, top, right, bottom])
 
     def average(self, boxes):
         avg = [0,0]
@@ -251,8 +375,145 @@ class Circle(Processor):
 class Cookbook(Processor):
 
     def __init__(self):
+        super(Cookbook, self).__init__()
         self.font = Font()
+        self.title_bbox = [] # bounding box for the title OCR
+        self.mode = 3
+        self.lower_tresh = 0
+        self.upper_tresh = 255
+
+    def init(self, page):
+        super(Cookbook, self).init(page)
+
+        page.setImageOriginal(super(Cookbook, self).crop(page.getImageOriginal()))
+
+        #prepare an image
+        image = cv2.cvtColor(np.array(page.getImageOriginal()), cv2.COLOR_RGB2BGR)
+        #image = cv2.resize(image, (0,0), fx=config.GUI_SCALE, fy=config.GUI_SCALE)
+
+        prevPt = ()
+        # define callback
+        def click(event, x, y, flags, param):
+            global prevPt
+            if(len(self.title_bbox) < 2):
+                # save the point where the click occurs
+                if event == cv2.EVENT_LBUTTONDOWN:
+                    prevPt = (x, y)
+                # check if it was a click, not a drag
+                elif event == cv2.EVENT_LBUTTONUP:
+                    if prevPt == (x, y):
+                        # save the coordinate
+                        self.title_bbox.append((x, y))
+            super(Cookbook, self).update("title_bounds", image, self.title_bbox)
+
+        # select the title region
+        cv2.namedWindow("title_bounds")
+        cv2.setMouseCallback("title_bounds", click)
+        super(Cookbook, self).display("title_bounds", image)
+        cv2.destroyWindow("title_bounds")
+
+        # set page to title crop
+        page.setImageOriginal(super(Cookbook, self).crop(page.getImageOriginal(), self.title_bbox))
+
+        def tresh(value):
+            page.lower_tresh = cv2.getTrackbarPos("lower_tresh", "tresh")
+            page.upper_tresh = cv2.getTrackbarPos("upper_tresh", "tresh")
+            page.process()
+
+        cv2.namedWindow("tresh")
+        cv2.createTrackbar("lower_tresh", "tresh", page.lower_tresh, 255, tresh)
+        cv2.createTrackbar("upper_tresh", "tresh", page.upper_tresh, 255, tresh)
+        # keep looping until the 'q' key is pressed
+        while True:
+            # display the image and wait for a keypress
+            image = np.array(page.getImageProcessed())
+            cv2.imshow("tresh", image)
+            key = cv2.waitKey(1) & 0xFF
+            # escape or space
+            if key == 27 or key == 32:
+                break
+        self.lower_tresh = cv2.getTrackbarPos("lower_tresh", "tresh")
+        self.upper_tresh = cv2.getTrackbarPos("upper_tresh", "tresh")
+        cv2.destroyWindow("tresh")
 
     def process(self, page):
-        self.font.set_start((100,100))
-        return self.font.phrase("Hello world!")
+        # crop the image
+        page.setImageOriginal(super(Cookbook, self).crop(page.getImageOriginal()))
+
+        # make a copy of the current image
+        im_ = page.getImageOriginal()
+
+        # crop to title area and recognize title
+        page.setImageOriginal(super(Cookbook, self).crop(page.getImageOriginal(), self.title_bbox))
+
+        page.lower_tresh = self.lower_tresh
+        page.upper_tresh = self.upper_tresh
+
+        title = " ".join(page.getText().split())
+        print("Searching for: {0}").format(title)
+        """
+        # start driver
+        driver = webdriver.Chrome('/usr/lib/chromedriver') # or add to your PATH
+        driver.implicitly_wait(5) # seconds
+        comments = []
+        count = 0
+        blogs = cookbook.search(title, driver, 5)
+        for blog in blogs:
+            blog_comments = cookbook.get_comments(blog, driver)
+            if blog_comments is not None:
+                print("Found {0} comments.").format(len(blog_comments))
+                count += len(blog_comments)
+                comments.append({"site": blog, "comments": blog_comments})
+                if(count > 3): break #always try to fetch 3 comments
+        print comments
+
+        driver.quit()
+        """
+
+
+        comments = [{'site': 'jamieoliver.com', 'comments': ['comment 1', 'comment 2']}]
+
+        # find empty space on the page
+        # start from top left and bottom right
+        page.setImageOriginal(im_)
+        page.process()
+        image = np.array(page.getImageProcessed())
+        self.find_empty_space(image, [(200,150), (page.getImageProcessed().size[0] - 200, page.getImageProcessed().size[1] - 200)])
+
+        sys.exit()
+
+        self.font.set_start((700,700))
+        #self.font.set_box((600,202))
+        instructions = self.font.phrase("Hello world! Dit is een zin die te lang is om te passen.")
+        instructions.append(Rect(self.font.get_start(), (700,302)))
+
+        return instructions
+
+    def get_properties(self):
+        properties = super(Cookbook, self).get_properties()
+        properties['title_bbox'] = self.title_bbox
+        properties['lower_tresh'] = self.lower_tresh
+        properties['upper_tresh'] = self.upper_tresh
+        return properties
+
+    def set_properties(self, properties):
+        super(Cookbook, self).set_properties(properties)
+        self.title_bbox = properties['title_bbox']
+        self.lower_tresh = properties['lower_tresh']
+        self.upper_tresh = properties['upper_tresh']
+
+    """ return bounding boxes of emtpy space, starting from a given array of points """
+    def find_empty_space(self, image, pts):
+        #image = cv2.resize(image, (0,0), fx=0.5, fy=0.5)
+        contours, hier = cv2.findContours(image,cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
+        cv2.namedWindow("test")
+        for pt in pts:
+            #cv2.circle(image, (int(pt[0]*0.5), int(pt[1]*0.5)), 5, 0)
+            cv2.circle(image, pt, 5, 0)
+        super(Cookbook, self).display("test", image)
+        cv2.destroyWindow("test")
+
+        boxes = []
+        for pt in pts:
+
+            print image[pt[0], pt[1]]

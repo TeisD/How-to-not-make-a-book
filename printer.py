@@ -32,6 +32,7 @@ class Printer:
         self.currentPosition = (0,0)
         self.convert = None
         self.tool = 'PEN';
+        self.is_on = False;
 
     def init(self):
         """Initialize the connections to the hardware components and load the OCR library."""
@@ -105,13 +106,14 @@ class Printer:
             filename = time.strftime('images/%Y%m%d_%H%M%S') + '.jpg'
             gp.check_result(gp.gp_file_save(camera_file, filename))
         else:
-            filename = 'debug.jpg'
+            filename = config.DEBUGGING_IMAGE
         im = Image.open(filename).convert('RGB')
-        im = im.crop((950, 400, 3200, 2300)) #hardcoded page boundaries. oeps
+        im = im.rotate(config.ROTATION, expand=1)
+        #im = im.crop((950, 400, 3200, 2300)) #hardcoded page boundaries. oeps
         # rotate image counter-clockwise if necesary
-        if(im.size[0] < im.size[1]):
-            im = im.rotate(90, expand=1)
-        im.save(filename[:-4]+'_edit.jpg')
+        #if(im.size[0] < im.size[1]):
+            #im = im.rotate(90, expand=1)
+        #im.save(filename[:-4]+'_edit.jpg')
         return im
 
     def calibrate(self):
@@ -176,18 +178,29 @@ class Printer:
             ["arc", (center x, center y), radius]
             ["box", (left, bottom), (right, top)]"""
 
-        self.go(self.convertCoordinate(instruction.start))
+        if(instruction.continuous is False): self.go(self.convertCoordinate(instruction.start))
         if(instruction.type == "line"):
+            if(instruction.continuous is False): self.on()
+            else:
+                if(self.is_on is False): self.on()
             self.line(self.convertCoordinate(instruction.end))
+            if(instruction.continuous is False): self.off()
         elif instruction.type == 'circle':
             self.circle(self.convertDistance(instruction.start, instruction.radius))
+        elif instruction.type == 'rect':
+            self.go(self.convertCoordinate(instruction.start))
+            self.line(self.convertCoordinate((instruction.end[0], instruction.start[1])))
+            self.line(self.convertCoordinate(instruction.end))
+            self.line(self.convertCoordinate((instruction.start[0], instruction.end[1])))
+            self.line(self.convertCoordinate(instruction.start))
+
 
     def go(self, c):
         """Go to a point
 
         c -- the coordinate Tuple to go"""
 
-        self.send('M3') # pen up and laser off
+        self.off() # pen up and laser off
         self.send('G0 X{0} Y{1}'.format(c[0],c[1]))
         self.currentPosition = c
         if config.VERBOSE:
@@ -198,9 +211,9 @@ class Printer:
 
         c -- the coordinate Tuple to go"""
 
-        self.on()
+        #self.on()
         self.send('G1 X{0} Y{1}'.format(c[0],c[1]))
-        self.off()
+        #self.off()
         self.currentPosition = c
 
     def circle(self, r):
@@ -223,7 +236,9 @@ class Printer:
             self.send('S1000')
 
     def off(self):
-        if(self.tool == 'PEN'): self.send('M3')
+        if(self.tool == 'PEN'):
+            self.send('M3')
+            time.sleep(0.125)
         elif(self.tool == 'LASER'): self.send('S0') #pen up
 
     def home(self):

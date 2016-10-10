@@ -19,7 +19,7 @@ class Gui:
         draw = ImageDraw.Draw(self.processed_img)
         for i in instructions:
             if i.type == "line":
-                draw.line([i.start, i.end], fill="red", width=2)
+                draw.line([i.start, i.end], fill="black", width=10)
             elif i.type == "circle":
                 draw.ellipse([i[1][0]-i[2], i[1][1]-i[2], i[1][0]+i[2], i[1][1]+i[2]], outline="red")  # left top right bottom of enclosing rectangle
             elif i.type == "rect":

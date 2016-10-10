@@ -13,9 +13,10 @@ class Job:
 
     @staticmethod
     def get_processor(mode):
-        if int(mode) == 1: return processor.Circle()
-        elif int(mode) == 2: return None
+        if int(mode) == 1: return processor.Processor()
+        elif int(mode) == 2: return processor.Circle()
         elif int(mode) == 3: return processor.Cookbook()
+        elif int(mode) == 4: return processor.Instructions()
 
     def __init__(self, name, processor, lang = 'nld'):
         """Create a new job

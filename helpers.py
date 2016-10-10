@@ -45,9 +45,10 @@ def print_help():
 
 def print_modes():
     cprint('Modes:', attrs=['bold'])
-    print('[1] CIRCLE - print a text by hightlighting matching characters with a circle')
-    print('[2] NEWSPAPER')
+    print('[1] PROCESSOR - default init & process functions. Useful for testing')
+    print('[2] CIRCLE - print a text by hightlighting matching characters with a circle')
     print('[3] COOKBOOK - add comments to recipes')
+    print('[4] INSTRUCTIONS - blackout text, but keep instructions')
 
 ## TRANSFORM COORDINATES ##
 ## from http://elonen.iki.fi/code/misc-notes/affine-fit/ ##

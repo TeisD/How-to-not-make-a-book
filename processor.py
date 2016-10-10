@@ -47,6 +47,10 @@ class Box:
             self.box = box
         else:
             self.box = str(box).split(' ')
+        self.left = int(self.box[1])
+        self.bottom =  int(self.box[2])
+        self.right = int(self.box[3])
+        self.top = int(self.box[4])
 
     def match(self, needle):
         pass
@@ -57,17 +61,26 @@ class Box:
     def getText(self):
         return str(self.box[0])
 
+    def getStart(self):
+        return (self.getLeft(), self.getTop())
+
+    def getEnd(self):
+        return (self.getRight(), self.getBottom())
+
+    def getBox(self):
+        return [self.getStart(), self.getEnd()]
+
     def getLeft(self):
-        return int(self.box[1])
+        return self.left
 
     def getBottom(self):
-        return int(self.box[2])
+        return self.bottom
 
     def getRight(self):
-        return int(self.box[3])
+        return self.right
 
     def getTop(self):
-        return int(self.box[4])
+        return self.top
 
     def getHeight(self):
         return self.getTop() - self.getBottom()
@@ -75,11 +88,26 @@ class Box:
     def getWidth(self):
         return self.getRight() - self.getLeft()
 
-    def stroke():
-        return ["circle", (box.getLeft() + box.getWidth()/2, self.height -  (box.getBottom() + box.getHeight()/2)), max(box.getHeight(), box.getWidth())/2 + config.MARGIN] # ["circle", (center), radius]
+    def getMiddle(self):
+        return int(self.getBottom() + self.getHeight()/2)
 
-    def strike():
-        return ["line", (box.getLeft(), self.height - (box.getBottom() + box.getHeight()/2)), (box.getRight(), self.height - (box.getBottom() + box.getHeight()/2))] # ["line", (start), (end)]
+    def setLeft(self, left):
+        self.left = left
+
+    def setBottom(self, bottom):
+        self.bottom = bottom
+
+    def setRight(self, right):
+        self.right = right
+
+    def setTop(self, top):
+        self.top = top
+
+    def stroke(self):
+        return None
+
+    def strike(self):
+        return Line((self.getLeft(), self.getMiddle()), (self.getRight(), self.getMiddle()))
 
 class Character(Box):
 
@@ -246,6 +274,8 @@ class Processor(object):
 
     def __init__(self):
         self.bbox = []
+        self.lower_tresh = 255
+        self.upper_tresh = 255
 
     def display(self, screen, image):
         # keep looping until the 'q' key is pressed
@@ -291,14 +321,47 @@ class Processor(object):
         self.display("page_bounds", image)
         cv2.destroyWindow("page_bounds")
 
+        # set page to title crop
+        page.setImageOriginal(self.crop(page.getImageOriginal(), self.bbox))
+
+        def tresh(value):
+            page.lower_tresh = cv2.getTrackbarPos("lower_tresh", "tresh")
+            page.upper_tresh = cv2.getTrackbarPos("upper_tresh", "tresh")
+            page.process()
+
+        cv2.namedWindow("tresh")
+        cv2.createTrackbar("lower_tresh", "tresh", page.lower_tresh, 255, tresh)
+        cv2.createTrackbar("upper_tresh", "tresh", page.upper_tresh, 255, tresh)
+        # keep looping until the 'q' key is pressed
+        while True:
+            # display the image and wait for a keypress
+            image = np.array(page.getImageProcessed())
+            cv2.imshow("tresh", image)
+            key = cv2.waitKey(1) & 0xFF
+            # escape or space
+            if key == 27 or key == 32:
+                break
+        self.lower_tresh = cv2.getTrackbarPos("lower_tresh", "tresh")
+        self.upper_tresh = cv2.getTrackbarPos("upper_tresh", "tresh")
+        cv2.destroyWindow("tresh")
+
     def process(self, page):
-        pass
+        page.setImageOriginal(self.crop(page.getImageOriginal()))
+        page.lower_tresh = self.lower_tresh
+        page.upper_tresh = self.upper_tresh
+        return page
 
     def get_properties(self):
-        return {'bbox': self.bbox}
+        return {
+            'bbox': self.bbox,
+            'lower_tresh': self.lower_tresh,
+            'upper_tresh': self.upper_tresh
+        }
 
     def set_properties(self, properties):
         self.bbox = properties['bbox']
+        self.lower_tresh = properties['lower_tresh']
+        self.upper_tresh = properties['upper_tresh']
 
     def crop(self, im, bbox = None):
         if bbox is None:
@@ -401,8 +464,6 @@ class Cookbook(Processor):
         self.font = Font()
         self.title_bbox = [] # bounding box for the title OCR
         self.mode = 3
-        self.lower_tresh = 0
-        self.upper_tresh = 255
         self.empty_space = []
 
     def init(self, page):
@@ -445,8 +506,8 @@ class Cookbook(Processor):
             page.process()
 
         cv2.namedWindow("tresh")
-        cv2.createTrackbar("lower_tresh", "tresh", page.lower_tresh, 255, tresh)
-        cv2.createTrackbar("upper_tresh", "tresh", page.upper_tresh, 255, tresh)
+        cv2.createTrackbar("lower_tresh", "tresh", super(Cookbook, self).lower_tresh, 255, tresh)
+        cv2.createTrackbar("upper_tresh", "tresh", super(Cookbook, self).upper_tresh, 255, tresh)
         # keep looping until the 'q' key is pressed
         while True:
             # display the image and wait for a keypress
@@ -456,8 +517,8 @@ class Cookbook(Processor):
             # escape or space
             if key == 27 or key == 32:
                 break
-        self.lower_tresh = cv2.getTrackbarPos("lower_tresh", "tresh")
-        self.upper_tresh = cv2.getTrackbarPos("upper_tresh", "tresh")
+        super(Cookbook, self).lower_tresh = cv2.getTrackbarPos("lower_tresh", "tresh")
+        super(Cookbook, self).upper_tresh = cv2.getTrackbarPos("upper_tresh", "tresh")
         cv2.destroyWindow("tresh")
 
         #################################
@@ -486,13 +547,10 @@ class Cookbook(Processor):
         im_ = page.getImageOriginal()
 
         # crop the image
-        page.setImageOriginal(super(Cookbook, self).crop(page.getImageOriginal()))
+        page = super(Cookbook, self).process(page)
 
         # crop to title area and recognize title
         page.setImageOriginal(super(Cookbook, self).crop(page.getImageOriginal(), self.title_bbox))
-
-        page.lower_tresh = self.lower_tresh
-        page.upper_tresh = self.upper_tresh
 
         title = " ".join(page.getText().split())
         title = re.sub('[^a-zA-Z0-9- _*.]', '', title)
@@ -554,16 +612,12 @@ class Cookbook(Processor):
     def get_properties(self):
         properties = super(Cookbook, self).get_properties()
         properties['title_bbox'] = self.title_bbox
-        properties['lower_tresh'] = self.lower_tresh
-        properties['upper_tresh'] = self.upper_tresh
         properties['empty_space'] = self.empty_space
         return properties
 
     def set_properties(self, properties):
         super(Cookbook, self).set_properties(properties)
         self.title_bbox = properties['title_bbox']
-        self.lower_tresh = properties['lower_tresh']
-        self.upper_tresh = properties['upper_tresh']
         self.empty_space = properties['empty_space']
 
     """ return bounding boxes of emtpy space, starting from a given array of points """
@@ -619,3 +673,75 @@ class Cookbook(Processor):
             boxes.append([(left['point'], top['point']+margin), (right['point'], bottom['point']-margin)])
 
         return boxes
+
+class Instructions(Processor):
+    def __init__(self):
+        super(Instructions, self).__init__()
+        self.mode = 4
+        self.verbs = None
+
+    def init(self, page):
+        super(Instructions, self).init(page)
+
+    def load_verbs(self):
+        with open("words_verbs.txt") as word_file:
+            verbs = set(word.strip().lower() for word in word_file)
+        with open("words_nouns.txt") as word_file:
+            nouns = set(word.strip().lower() for word in word_file)
+        #improve the list
+        verbs = set(verbs - nouns)
+        verbs = set(verbs - set(["have", "is", "are", "busy"]))
+        self.verbs = set(verbs | set(["dont", "do"]))
+
+    def is_verb(self, word):
+        return word.lower() in self.verbs
+
+    def process(self, page):
+        if self.verbs is None:
+            self.load_verbs()
+        # crop the image
+        page = super(Instructions, self).process(page)
+
+        # iterate word by word
+        match = False
+        instructions = []
+        prev = None # previous box
+        match_str = "" # for printing
+        for word in page.getWords():
+            word = Box(word)
+            if not match: #look for a verb
+                if config.VERBOSE:
+                    if match_str is not "":
+                        print(match_str)
+                        match_str = ""
+                if self.is_verb(re.sub('[^A-Za-z0-9]+', '', word.getText())): #match
+                    match = True
+                else: #cross out
+                    if prev is None:
+                        prev = word
+                    else:
+                        if(word.getLeft() < prev.getRight()): #new line
+                            instructions.append(prev.strike())
+                            prev = word
+                        else:
+                            prev.setBottom(min(prev.getBottom(), word.getBottom()))
+                            prev.setTop(max(prev.getTop(), word.getTop()))
+                            prev.setRight(word.getRight())
+            if match: #if there is a match, continue until the end of the phrase
+                # first save the instructions up to then
+                if prev is not None:
+                    instructions.append(prev.strike())
+                    prev = None
+                if re.search(r'[\.,!?:;]', word.getText()) is not None:
+                    match = False
+                if config.VERBOSE:
+                    match_str += " " + word.getText()
+
+        return instructions
+
+        sys.exit()
+        #cv2.namedWindow("test")
+        #super(Instructions, self).display("test", np.array(page.getImageProcessed()))
+        print(page.getText())
+
+        return []

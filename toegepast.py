@@ -51,10 +51,8 @@ def main(argv):
                 i = raw_input("Job already exists. Overwrite [Y/N]? ")
                 if i.lower() != 'y': sys.exit()
             helpers.print_modes()
-            #mode = raw_input("Job mode: ")
-            mode = 3
-            #lang = raw_input("Job language (nld/eng): ")
-            lang = 'eng'
+            mode = raw_input("Job mode: ")
+            lang = raw_input("Job language (nld/eng): ")
             printer = Printer()
             printer.safe = True
             printer.init()
@@ -78,17 +76,19 @@ def main(argv):
                 sys.exit()
             break
 
-    #gui = Gui()
+    if config.DEBUGGING: gui = Gui()
 
     while True:
         page = Page(printer.capture(), printer.getOcr(), job.get_language())
-        #gui.setOriginal(page.getImageOriginal())
         instructions = job.process(page)
-        #gui.setProcessed(page.getImageProcessed())
-        #gui.plot(instructions)
-        printer.go((0, 200))
-        printer.plotList(instructions)
-        printer.home()
+        if config.DEBUGGING:
+            gui.setOriginal(page.getImageOriginal())
+            gui.setProcessed(page.getImageProcessed())
+            gui.plot(instructions)
+        else:
+            printer.go((0, 200))
+            printer.plotList(instructions)
+            printer.home()
         i = raw_input("Please turn the page and press ENTER to continue or Q to quit... ")
         if i == 'q': break
 

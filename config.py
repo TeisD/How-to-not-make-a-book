@@ -1,5 +1,5 @@
-DEBUGGING = 0; # test-runs without camera and plotter connected and shows aditional messages during runtime
-DEBUGGING_IMAGE = 'images/20161009_170522.jpg' # filename of the image to use for capture in debuggin mode
+DEBUGGING = 1; # test-runs without camera and plotter connected and shows aditional messages during runtime
+DEBUGGING_IMAGE = 'images/DSC_0147.JPG' # filename of the image to use for capture in debuggin mode
 SKIP_CAMERA = 0 # don't connect to the camera, even when debugging mode is false
 VERBOSE = 1; # show verbose output while plotting
 

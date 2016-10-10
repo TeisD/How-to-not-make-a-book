@@ -56,6 +56,7 @@ def main(argv):
             #lang = raw_input("Job language (nld/eng): ")
             lang = 'eng'
             printer = Printer()
+            printer.safe = True
             printer.init()
             job = Job(name, Job.get_processor(mode), lang)
             page = Page(printer.capture(), printer.getOcr(), job.get_language())
@@ -68,6 +69,7 @@ def main(argv):
                 with open('jobs/' + arg + '.conf', 'rb') as f:
                     p = pickle.load(f)
                     printer = Printer()
+                    printer.safe = True
                     printer.init()
                     job = Job(p['name'], Job.get_processor(p['processor']), p['lang'])
                     job.processor.set_properties(p['processor_properties'])
@@ -81,15 +83,16 @@ def main(argv):
     while True:
         page = Page(printer.capture(), printer.getOcr(), job.get_language())
         #gui.setOriginal(page.getImageOriginal())
-        #gui.setProcessed(page.getImageProcessed())
         instructions = job.process(page)
+        #gui.setProcessed(page.getImageProcessed())
         #gui.plot(instructions)
-        #printer.plotList(instructions)
-        #printer.home()
-        raw_input("Please turn the page and press enter to continue...")
+        printer.go((0, 200))
+        printer.plotList(instructions)
+        printer.home()
+        i = raw_input("Please turn the page and press ENTER to continue or Q to quit... ")
+        if i == 'q': break
 
-
-
+    sys.exit()
 
 if __name__ == "__main__":
     main(sys.argv)

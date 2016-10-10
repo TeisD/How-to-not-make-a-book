@@ -33,6 +33,7 @@ class Printer:
         self.convert = None
         self.tool = 'PEN';
         self.is_on = False;
+        self.safe = False;
 
     def init(self):
         """Initialize the connections to the hardware components and load the OCR library."""
@@ -44,7 +45,7 @@ class Printer:
                     self.port = serial.tools.list_ports.grep("modemf").next()[0]
                 self.serial = serial.Serial(self.port, 115200)
                 time.sleep(5) # give some time to the port to open
-                self.home()
+                self.home(True)
                 print_ok()
             except StopIteration:
                 print_fail('Could not find /dev/cu.usbmodemf*. Is the Arduino connected?')
@@ -99,7 +100,7 @@ class Printer:
 
         number -- An integer representing the current page number
         """
-        if not config.DEBUGGING:
+        if not config.DEBUGGING and not config.SKIP_CAMERA:
             file_path = gp.check_result(gp.gp_camera_capture(self.camera, gp.GP_CAPTURE_IMAGE, self.context))
             #print('Camera file path: {0}/{1}'.format(file_path.folder, file_path.name))
             camera_file = gp.check_result(gp.gp_camera_file_get(self.camera, file_path.folder, file_path.name, gp.GP_FILE_TYPE_NORMAL, self.context))
@@ -125,9 +126,9 @@ class Printer:
         # plot circles at some coordinates
         self.home()
         image = self.capture()
-        image = cv2.cvtColor( np.array(image), cv2.COLOR_RGB2GRAY );
+        image = cv2.cvtColor( np.array(image), cv2.COLOR_RGB2GRAY )
         image = cv2.medianBlur(image, 5)
-        circles = cv2.HoughCircles(image, cv2.HOUGH_GRADIENT,1,250,param1=100,param2=30,minRadius=15,maxRadius=35)
+        circles = cv2.HoughCircles(image, cv2.HOUGH_GRADIENT,1,250,param1=100,param2=35,minRadius=15,maxRadius=30)
         circles = circles[0,:]
 
         if len(circles) != len(config.CALIBRATON_POINTS):
@@ -189,10 +190,12 @@ class Printer:
             self.circle(self.convertDistance(instruction.start, instruction.radius))
         elif instruction.type == 'rect':
             self.go(self.convertCoordinate(instruction.start))
+            self.on()
             self.line(self.convertCoordinate((instruction.end[0], instruction.start[1])))
             self.line(self.convertCoordinate(instruction.end))
             self.line(self.convertCoordinate((instruction.start[0], instruction.end[1])))
             self.line(self.convertCoordinate(instruction.start))
+            self.off()
 
 
     def go(self, c):
@@ -241,7 +244,11 @@ class Printer:
             time.sleep(0.125)
         elif(self.tool == 'LASER'): self.send('S0') #pen up
 
-    def home(self):
+    def home(self, first = False):
+        if not first and self.safe:
+            self.off()
+            self.send('G0 X0 Y200')
+            time.sleep(10)
         self.send('$H')
         self.currentPosition = (0,0)
 

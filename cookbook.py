@@ -1,12 +1,14 @@
 from bs4 import BeautifulSoup
+import requests
 from requests import get
 import urllib
 from disqusapi import DisqusAPI
 import json
+from selenium.common.exceptions import TimeoutException
 
 disqus_secret_key = 'gEsLGMfIJ2Wy8Ft2nE84ANSoIJ61kLmNRQlRukgHEwfGb69ngZnRbyAhzPyeZv2G'
 disqus_public_key = '7JIzndWon2HyoEnL8LUyaAIBLaDS8323wQ3qgbbAEPh3Hn4Ywgb3Cl04kJaWhmDW'
-tags = ['comment_content', 'comment-content', 'comment-body', 'comment_body', 'comments_content', 'comments-content', 'comments-body', 'comments_body']
+tags = ['comment_content', 'comment-content', 'comment-body', 'comment_body', 'comments_content', 'comments-content', 'comments-body', 'comments_body', 'field-name-comment-body']
 
 def disqus(soup, url):
     print "DISQUS"
@@ -26,11 +28,16 @@ def disqus(soup, url):
                     disqus_id = clean.replace(" ", "")[1:-1]
 
     if disqus_id != None:
-        results = json.loads(get('https://disqus.com/api/3.0/threads/listPosts.json?api_key='+disqus_public_key+'&thread=link:'+urllib.quote(url)+'&forum='+disqus_id).content)["response"]
+        results = json.loads(get('https://disqus.com/api/3.0/threads/listPosts.json?api_key='+disqus_public_key+'&thread=link:'+urllib.quote_plus(url)+'&forum='+disqus_id).content)
+        if(results["code"] == 2): return comments
+        results = results["response"]
         if len(results) > 0:
             comments = []
             for comment in results:
-                comments.append(comment["raw_message"])
+                if isinstance(comment, basestring):
+                    comments.append(comment)
+                else:
+                    comments.append(comment["raw_message"])
 
     return comments
 
@@ -65,7 +72,10 @@ def deep(url, driver):
     print "DEEP"
     comments = None;
     elements = []
-    driver.get(url)
+    try:
+        driver.get(url)
+    except TimeoutException:
+        return comments
 
     for tag in tags:
         print("searching for " + tag)
@@ -93,10 +103,14 @@ def search(keyword, driver, tries):
     return results[:tries]
 
 def get_comments(url, driver):
-    site = get(url, timeout = 2)
-    soup = BeautifulSoup(site.content, 'html.parser')
+    print('[' + url + ']')
+    try:
+        site = get(url, timeout = 10)
+        soup = BeautifulSoup(site.content, 'html.parser')
 
-    comments = disqus(soup, url)
-    if comments is None: comments = scrape(soup)
-    if comments is None: comments = deep(url, driver)
-    return comments
+        comments = disqus(soup, url)
+        if comments is None: comments = scrape(soup)
+        if comments is None: comments = deep(url, driver)
+        return comments
+    except requests.exceptions.Timeout:
+        return []

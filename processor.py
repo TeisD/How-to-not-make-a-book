@@ -4,7 +4,10 @@ import cv2
 import config
 import sys
 import cookbook
+import random
+import re
 from selenium import webdriver
+from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 
 class Instruction(object):
 
@@ -93,8 +96,8 @@ class Font(object):
     OFFSET_SPECIAL = 700
     OFFSET_CAPITALS = 500
     OFFSET_SMALL = 600
-    LINEHEIGHT = 60
-    BASELINE = -9
+    LINEHEIGHT = 40
+    BASELINE = 9
     SPACE = 10
 
     def __init__(self, scale = 1):
@@ -132,12 +135,11 @@ class Font(object):
             #word
             if self.box is not None: #check if it fits
                 bbox = self.get_word_box(w)
-                if(self.current[0] + bbox[0] > self.box[0]): #too large? move to new line
-                    self.current = (self.start[0], self.current[1] + Font.LINEHEIGHT)
-                    if(self.current[1] - Font.LINEHEIGHT > self.box[1]): #too large? stop
+                if(self.current[0] + bbox[0] > self.start[0] + self.box[0]): #too large? move to new line
+                    self.current = (self.start[0], self.current[1] + self.scale* Font.LINEHEIGHT)
+                    if(self.current[1] - Font.LINEHEIGHT > self.start[1] + self.box[1]): #too large? stop
                         return []# don't draw anything
             for l in w:
-                print l
                 instructions += self.letter(l)
             #whitespace
             self.current = (self.current[0] + self.scale * Font.SPACE, self.current[1])
@@ -171,9 +173,29 @@ class Font(object):
         height = 0
         for l in w:
             glyph = self.glyph(self.map(l))
-            width += glyph["right"] - glyph["left"] # right - left
-            height = max(height, glyph["bbox"][1][1] - glyph["bbox"][0][1]) # top - bottom
+            if glyph is not None:
+                width += glyph["right"] - glyph["left"] # right - left
+                height = max(height, glyph["bbox"][1][1] - glyph["bbox"][0][1]) # top - bottom
         return (self.scale*width, self.scale*height)
+
+    """returns the dimensions of the sentence p
+    currently returns THE WRONG width"""
+    def get_size(self, p):
+        p = p.split()
+        width = 0
+        height = 0
+        current = self.current
+        for w in p:
+            #word
+            if self.box is not None: #check if it fits
+                bbox = self.get_word_box(w)
+                if height < bbox[1]: height = bbox[1]
+                if(current[0] + bbox[0] > self.box[0]): #too large? move to new line
+                    current = (self.start[0], current[1] + Font.LINEHEIGHT)
+            #whitespace
+            current = (current[0] + self.scale * Font.SPACE, current[1])
+        return (width, height)
+
 
     """ return a character from a HERSHEY character code """
     def glyph(self,c):
@@ -381,8 +403,10 @@ class Cookbook(Processor):
         self.mode = 3
         self.lower_tresh = 0
         self.upper_tresh = 255
+        self.empty_space = []
 
     def init(self, page):
+        im_ = page.getImageOriginal()
         super(Cookbook, self).init(page)
 
         page.setImageOriginal(super(Cookbook, self).crop(page.getImageOriginal()))
@@ -436,12 +460,33 @@ class Cookbook(Processor):
         self.upper_tresh = cv2.getTrackbarPos("upper_tresh", "tresh")
         cv2.destroyWindow("tresh")
 
+        #################################
+        # select points for blank areas #
+        #################################
+        page.setImageOriginal(im_)
+        page.process()
+        image = np.array(page.getImageProcessed())
+        image = cv2.resize(image, (0,0), fx=config.GUI_SCALE, fy=config.GUI_SCALE)
+        # define callback
+        def empty_space_click(event, x, y, flags, param):
+            if event == cv2.EVENT_LBUTTONUP:
+                self.empty_space.append((int(x/config.GUI_SCALE), int(y/config.GUI_SCALE)))
+                cv2.circle(image, (x, y), 5, 0)
+                cv2.imshow("empty_space", image)
+
+        # select the title region
+        cv2.namedWindow("empty_space")
+        cv2.setMouseCallback("empty_space", empty_space_click)
+        super(Cookbook, self).display("empty_space", image)
+        cv2.destroyWindow("empty_space")
+
     def process(self, page):
-        # crop the image
-        page.setImageOriginal(super(Cookbook, self).crop(page.getImageOriginal()))
 
         # make a copy of the current image
         im_ = page.getImageOriginal()
+
+        # crop the image
+        page.setImageOriginal(super(Cookbook, self).crop(page.getImageOriginal()))
 
         # crop to title area and recognize title
         page.setImageOriginal(super(Cookbook, self).crop(page.getImageOriginal(), self.title_bbox))
@@ -450,11 +495,17 @@ class Cookbook(Processor):
         page.upper_tresh = self.upper_tresh
 
         title = " ".join(page.getText().split())
+        title = re.sub('[^a-zA-Z0-9- _*.]', '', title)
         print("Searching for: {0}").format(title)
-        """
+
         # start driver
-        driver = webdriver.Chrome('/usr/lib/chromedriver') # or add to your PATH
-        driver.implicitly_wait(5) # seconds
+        #https://developer.mozilla.org/en-US/docs/Mozilla/QA/Marionette/WebDriver
+        #caps = DesiredCapabilities.FIREFOX
+        #caps["marionette"] = True
+        driver = webdriver.Firefox()
+        #driver = webdriver.Chrome() # or add to your PATH
+        driver.set_page_load_timeout(15)
+        driver.implicitly_wait(3) # seconds
         comments = []
         count = 0
         blogs = cookbook.search(title, driver, 5)
@@ -463,29 +514,40 @@ class Cookbook(Processor):
             if blog_comments is not None:
                 print("Found {0} comments.").format(len(blog_comments))
                 count += len(blog_comments)
-                comments.append({"site": blog, "comments": blog_comments})
-                if(count > 3): break #always try to fetch 3 comments
-        print comments
+                comments += blog_comments
+                if(count >= 3): break #always try to fetch 4 comments
 
         driver.quit()
-        """
 
-
-        comments = [{'site': 'jamieoliver.com', 'comments': ['comment 1', 'comment 2']}]
+        #comments = ['comment1asdfsadfasdfas sdfasf asdfsad asdfasdf', 'comment 2',  'comment 3 Deze is te lang om sdlfkj soijsdklfj owijskljd foiwjeklj sdoifjlkwjef osijdflk weofjlksjd foiwjefkl jsdfoijlkwje fte passen']
 
         # find empty space on the page
         # start from top left and bottom right
         page.setImageOriginal(im_)
         page.process()
         image = np.array(page.getImageProcessed())
-        self.find_empty_space(image, [(200,150), (page.getImageProcessed().size[0] - 200, page.getImageProcessed().size[1] - 200)])
+        #boxes = self.find_empty_space(image, [(500,150), (page.getImageProcessed().size[0] - 200, page.getImageProcessed().size[1] - 200)])
+        boxes = self.find_empty_space(image, self.empty_space)
+        random.shuffle(boxes)
 
-        sys.exit()
-
-        self.font.set_start((700,700))
-        #self.font.set_box((600,202))
-        instructions = self.font.phrase("Hello world! Dit is een zin die te lang is om te passen.")
-        instructions.append(Rect(self.font.get_start(), (700,302)))
+        # fit the comments in the boxes
+        # current implementation: print, if instructions are empty: skip to next box
+        instructions = []
+        for box in boxes:
+            #instructions.append(Rect(box[0], box[1]))
+            self.font.set_start((box[0]))
+            self.font.set_box((box[1][0] - box[0][0], box[1][1] - box[0][1]))
+            i = 0
+            for comment in comments:
+                print comment
+                current_instruction = self.font.phrase(comment)
+                if len(current_instruction) > 0:
+                    instructions = instructions + current_instruction
+                    self.font.current = (box[0][0], self.font.current[1] + self.font.scale * 2 * Font.LINEHEIGHT)
+                    i += 1
+                else:
+                    break
+            comments = comments[i:]
 
         return instructions
 
@@ -494,6 +556,7 @@ class Cookbook(Processor):
         properties['title_bbox'] = self.title_bbox
         properties['lower_tresh'] = self.lower_tresh
         properties['upper_tresh'] = self.upper_tresh
+        properties['empty_space'] = self.empty_space
         return properties
 
     def set_properties(self, properties):
@@ -501,19 +564,58 @@ class Cookbook(Processor):
         self.title_bbox = properties['title_bbox']
         self.lower_tresh = properties['lower_tresh']
         self.upper_tresh = properties['upper_tresh']
+        self.empty_space = properties['empty_space']
 
     """ return bounding boxes of emtpy space, starting from a given array of points """
     def find_empty_space(self, image, pts):
-        #image = cv2.resize(image, (0,0), fx=0.5, fy=0.5)
-        contours, hier = cv2.findContours(image,cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
-        cv2.namedWindow("test")
-        for pt in pts:
-            #cv2.circle(image, (int(pt[0]*0.5), int(pt[1]*0.5)), 5, 0)
-            cv2.circle(image, pt, 5, 0)
-        super(Cookbook, self).display("test", image)
-        cv2.destroyWindow("test")
 
         boxes = []
         for pt in pts:
+            left = {'go': True, 'point': pt[0]}
+            top = {'go': True, 'point': pt[1]}
+            right = {'go': True, 'point': pt[0]}
+            bottom = {'go': True, 'point': pt[1]}
 
-            print image[pt[0], pt[1]]
+            # expand to top left
+            while left['go'] or top['go']:
+                if left['go']:
+                    left['point'] -= 1
+                    hits = 0
+                    y = top['point']
+                    while y <= bottom['point']:
+                        if image[y, left['point']][0] == 0: hits += 1
+                        y += 1
+                    if (hits > 5) or (left['point'] <= 0): left['go'] = False
+                if top['go']:
+                    top['point'] -= 1
+                    hits = 0
+                    x = left['point']
+                    while x <= right['point']:
+                        if image[top['point'], x][0] == 0: hits += 1
+                        x += 1
+                    if (hits > 5) or (top['point'] <= 0): top['go'] = False
+
+            # expand to bottom right
+            while right['go'] or bottom['go']:
+                if right['go']:
+                    right['point'] += 1
+                    hits = 0
+                    y = top['point']
+                    while y <= bottom['point']:
+                        if image[y, right['point']][0] == 0: hits += 1
+                        y += 1
+                    if (hits > 5) or (right['point'] >= image.shape[1] - 1): right['go'] = False
+                if bottom['go']:
+                    bottom['point'] += 1
+                    hits = 0
+                    x = left['point']
+                    while x <= right['point']:
+                        if image[bottom['point'], x][0] == 0: hits += 1
+                        x += 1
+                    if (hits > 5) or (bottom['point'] >= image.shape[0] - 1): bottom['go'] = False
+
+            # return box, add some margin
+            margin = 25
+            boxes.append([(left['point'], top['point']+margin), (right['point'], bottom['point']-margin)])
+
+        return boxes

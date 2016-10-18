@@ -86,7 +86,7 @@ def main(argv):
             gui.setProcessed(page.getImageProcessed())
             gui.plot(instructions)
         else:
-            printer.go((0, 200))
+            printer.go((0, 250))
             printer.plotList(instructions)
             printer.home()
         i = raw_input("Please turn the page and press ENTER to continue or Q to quit... ")

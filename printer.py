@@ -128,7 +128,8 @@ class Printer:
         image = self.capture()
         image = cv2.cvtColor( np.array(image), cv2.COLOR_RGB2GRAY )
         image = cv2.medianBlur(image, 5)
-        circles = cv2.HoughCircles(image, cv2.HOUGH_GRADIENT,1,250,param1=100,param2=35,minRadius=15,maxRadius=30)
+        #circles = cv2.HoughCircles(image, cv2.HOUGH_GRADIENT,1,250,param1=100,param2=35,minRadius=15,maxRadius=30) #good for blue permanent fineliner
+        circles = cv2.HoughCircles(image, cv2.HOUGH_GRADIENT,1,250,param1=200,param2=30,minRadius=20,maxRadius=30) #alcoholstift
         circles = circles[0,:]
 
         if len(circles) != len(config.CALIBRATON_POINTS):
@@ -187,6 +188,7 @@ class Printer:
             self.line(self.convertCoordinate(instruction.end))
             if(instruction.continuous is False): self.off()
         elif instruction.type == 'circle':
+            self.go(self.convertCoordinate(instruction.start))
             self.circle(self.convertDistance(instruction.start, instruction.radius))
         elif instruction.type == 'rect':
             self.go(self.convertCoordinate(instruction.start))
@@ -196,6 +198,9 @@ class Printer:
             self.line(self.convertCoordinate((instruction.start[0], instruction.end[1])))
             self.line(self.convertCoordinate(instruction.start))
             self.off()
+        elif instruction.type = 'arc':
+            self.go(self.convertCoordinate(instruction.start))
+            self.arc(self.convertDistance(instruction.start, instruction.radius, instruction.quadrant))
 
 
     def go(self, c):
@@ -229,26 +234,45 @@ class Printer:
         self.send('G2 X{0} Y{1} I{2}'.format(self.currentPosition[0], self.currentPosition[1], r)) # make a full circle
         self.off()
 
+    def arc(self, r, quadrant):
+        if quadrant == 0:
+            self.go((self.currentPosition[0], self.currentPosition[1]-r))
+            self.on()
+            self.send('G2 X{0} Y{1} I{2} J{3}'.format(self.currentPosition[0]+r, self.currentPosition[1]+r, 0, r))
+        elif quadrant == 1:
+            self.go((self.currentPosition[0]+r, self.currentPosition[1]))
+            self.send('G2 X{0} Y{1} I{2} J{3}'.format(self.currentPosition[0]-r, self.currentPosition[1]+r, -r, 0))
+        elif quadrant == 2:
+            self.go((self.currentPosition[0], self.currentPosition[1]+r))
+            self.send('G2 X{0} Y{1} I{2} J{3}'.format(self.currentPosition[0]-r, self.currentPosition[1]-r, 0, -r))
+        elif quadrant == 3:
+            self.go((self.currentPosition[0]-r, self.currentPosition[1]))
+            self.send('G2 X{0} Y{1} I{2} J{3}'.format(self.currentPosition[0]+r, self.currentPosition[1]-r, r, 0))
+        self.off()
+
     def on(self):
         if(self.tool == 'PEN'):
             self.send('F4000')
             self.send('M4') # pen down
             time.sleep(0.125)
         elif(self.tool == 'LASER'):
-            self.send('F350')
+            self.send('F400')
             self.send('S1000')
+            self.send('M3')
 
     def off(self):
         if(self.tool == 'PEN'):
             self.send('M3')
             time.sleep(0.125)
-        elif(self.tool == 'LASER'): self.send('S0') #pen up
+        elif(self.tool == 'LASER'):
+            self.send('M5')
+            self.send('S0') #pen up
 
     def home(self, first = False):
         if not first and self.safe:
             self.off()
-            self.send('G0 X0 Y200')
-            time.sleep(10)
+            self.send('G0 X0 Y250')
+            time.sleep(5)
         self.send('$H')
         self.currentPosition = (0,0)
 

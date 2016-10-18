@@ -12,9 +12,24 @@ from PIL import Image
 
 printer = Printer()
 printer.init()
+printer.capture()
 
 raw_input('Ready?')
-printer.capture()
+printer.tool='LASER'
+while(True):
+    printer.go((50,250))
+    printer.on()
+    printer.line((200,250))
+    printer.line((200,260))
+    printer.line((100,260))
+    printer.line((100,270))
+    printer.line((200, 270))
+    printer.line((200, 280))
+    printer.line((100,280))
+    printer.line((100, 290))
+    printer.line((200,290))
+    printer.off()
+#printer.capture()
 raw_input('Done')
 
 #job = Job('test', Job.get_processor(3))

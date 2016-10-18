@@ -4,8 +4,10 @@ import cv2
 import config
 import sys
 import cookbook
+import stockphoto
 import random
 import re
+from PIL import Image, ImageDraw
 from selenium import webdriver
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 
@@ -28,8 +30,17 @@ class Circle(Instruction):
 
     def __init__(self, start, radius, cont = False):
         self.type = "circle"
-        self.start = start
+        self.start = start # center point
         self.radius = radius
+        self.continuous = cont
+
+""" In this case, an arc is 1/4th of a circle"""
+class Arc(Instruction):
+    def __init__(self, start, radius, quadrant, cont = False):
+        self.type = "arc"
+        self.start = start #center point
+        self.radius = radius #radius
+        self.quadrant = quadrant #starting point, from 0 (top) to 3 (left)
         self.continuous = cont
 
 class Rect(Instruction):
@@ -47,10 +58,17 @@ class Box:
             self.box = box
         else:
             self.box = str(box).split(' ')
-        self.left = int(self.box[1])
-        self.bottom =  int(self.box[2])
-        self.right = int(self.box[3])
-        self.top = int(self.box[4])
+        if (len(self.box) != 5):
+            self.box = None
+            self.left = None
+            self.bottom = None
+            self.right = None
+            self.top = None
+        else:
+            self.left = int(self.box[1])
+            self.bottom =  int(self.box[2])
+            self.right = int(self.box[3])
+            self.top = int(self.box[4])
 
     def match(self, needle):
         pass
@@ -135,9 +153,17 @@ class Font(object):
         self.start = (0, 0)
         self.box = None
         self.current = (self.start[0], self.start[1] + self.scale*Font.BASELINE)
+        self.offset_special = Font.OFFSET_SPECIAL
+        self.offset_capitals = Font.OFFSET_CAPITALS
+        self.offset_small = Font.OFFSET_SMALL
 
     def set_scale(self, scale):
         self.scale = scale
+
+    def set_offset(self, offset):
+        self.offset_special = Font.OFFSET_SPECIAL + offset
+        self.offset_capitals = Font.OFFSET_CAPITALS + offset
+        self.offset_small = Font.OFFSET_SMALL + offset
 
     """Set a start position for the text
 
@@ -155,6 +181,9 @@ class Font(object):
         self.box = box
     def get_box(self):
         return self.box
+
+    def newline(self):
+        self.current = (self.start[0], self.start[1] + Font.LINEHEIGHT * self.scale)
 
     def phrase(self, p):
         instructions = []
@@ -233,39 +262,39 @@ class Font(object):
     """ map an ASCII character code to HERSHEY """
     def map(self,c):
         if (ord(c) < 33): return #unused
-        if (ord(c) == 33): return Font.OFFSET_SPECIAL + 14 #!
-        if (ord(c) == 34): return Font.OFFSET_SPECIAL + 17 #"
-        if (ord(c) == 35): return Font.OFFSET_SPECIAL + 33 ##
-        if (ord(c) == 36): return Font.OFFSET_SPECIAL + 19 #$
+        if (ord(c) == 33): return self.offset_special + 14 #!
+        if (ord(c) == 34): return self.offset_special + 17 #"
+        if (ord(c) == 35): return self.offset_special + 33 ##
+        if (ord(c) == 36): return self.offset_special + 19 #$
         if (ord(c) == 37): return #%
-        if (ord(c) == 38): return Font.OFFSET_SPECIAL + 34 #&
-        if (ord(c) == 39): return Font.OFFSET_SPECIAL + 16 #'
-        if (ord(c) == 40): return Font.OFFSET_SPECIAL + 21 #(
-        if (ord(c) == 41): return Font.OFFSET_SPECIAL + 22 #)
-        if (ord(c) == 42): return Font.OFFSET_SPECIAL + 28 #*
-        if (ord(c) == 43): return Font.OFFSET_SPECIAL + 25 #+
-        if (ord(c) == 44): return Font.OFFSET_SPECIAL + 11 #,
-        if (ord(c) == 45): return Font.OFFSET_SPECIAL + 24 #-
-        if (ord(c) == 46): return Font.OFFSET_SPECIAL + 10 #.
-        if (ord(c) == 47): return Font.OFFSET_SPECIAL + 20 #/
-        if (ord(c) > 47 and ord(c) < 58): return Font.OFFSET_SPECIAL + (ord(c) - 48) #numbers
-        if (ord(c) == 58): return Font.OFFSET_SPECIAL + 12 #:
-        if (ord(c) == 59): return Font.OFFSET_SPECIAL + 13 #;
+        if (ord(c) == 38): return self.offset_special + 34 #&
+        if (ord(c) == 39): return self.offset_special + 16 #'
+        if (ord(c) == 40): return self.offset_special + 21 #(
+        if (ord(c) == 41): return self.offset_special + 22 #)
+        if (ord(c) == 42): return self.offset_special + 28 #*
+        if (ord(c) == 43): return self.offset_special + 25 #+
+        if (ord(c) == 44): return self.offset_special + 11 #,
+        if (ord(c) == 45): return self.offset_special + 24 #-
+        if (ord(c) == 46): return self.offset_special + 10 #.
+        if (ord(c) == 47): return self.offset_special + 20 #/
+        if (ord(c) > 47 and ord(c) < 58): return self.offset_special + (ord(c) - 48) #numbers
+        if (ord(c) == 58): return self.offset_special + 12 #:
+        if (ord(c) == 59): return self.offset_special + 13 #;
         if (ord(c) == 60): return #<
-        if (ord(c) == 61): return Font.OFFSET_SPECIAL + 26 #=
+        if (ord(c) == 61): return self.offset_special + 26 #=
         if (ord(c) == 62): return #>
-        if (ord(c) == 63): return Font.OFFSET_SPECIAL + 15 #?
+        if (ord(c) == 63): return self.offset_special + 15 #?
         if (ord(c) == 64): return #@
-        if (ord(c) > 64 and ord(c) < 91): return Font.OFFSET_CAPITALS + (ord(c) - 64) #capitals
+        if (ord(c) > 64 and ord(c) < 91): return self.offset_capitals + (ord(c) - 64) #capitals
         if (ord(c) == 91): return #[
         if (ord(c) == 92): return #\
         if (ord(c) == 93): return #]
         if (ord(c) == 94): return #^
         if (ord(c) == 95): return #_
         if (ord(c) == 96): return #`
-        if (ord(c) > 96 and ord(c) < 123): return Font.OFFSET_SMALL + (ord(c) - 96) #small letters
+        if (ord(c) > 96 and ord(c) < 123): return self.offset_small + (ord(c) - 96) #small letters
         if (ord(c) == 123): return #{
-        if (ord(c) == 124): return Font.OFFSET_SPECIAL + 223 #|
+        if (ord(c) == 124): return self.offset_special + 223 #|
         if (ord(c) == 125): return #}
         if (ord(c) == 126): return #~
         return
@@ -346,7 +375,7 @@ class Processor(object):
         cv2.destroyWindow("tresh")
 
     def process(self, page):
-        page.setImageOriginal(self.crop(page.getImageOriginal()))
+        page.setImageOriginal(self.soft_crop(page.getImageOriginal()))
         page.lower_tresh = self.lower_tresh
         page.upper_tresh = self.upper_tresh
         return page
@@ -374,6 +403,20 @@ class Processor(object):
         # NOTE: its img[y: y + h, x: x + w] and *not* img[x: x + w, y: y + h]
         return im.crop([left, top, right, bottom])
 
+    def soft_crop(self, im, bbox = None):
+        if bbox is None:
+            bbox = self.bbox
+        left = min(bbox[0][0], bbox[1][0])
+        right = max(bbox[0][0], bbox[1][0])
+        top = min(bbox[0][1], bbox[1][1])
+        bottom = max(bbox[0][1], bbox[1][1])
+        draw = ImageDraw.Draw(im)
+        draw.rectangle([(0,0), (im.size[0], top)], fill=(255,255,255)) #top
+        draw.rectangle([(0,0), (left, im.size[1])], fill=(255,255,255)) #left
+        draw.rectangle([(0,im.size[1]), (im.size[0], bottom)], fill=(255,255,255)) #bottom
+        draw.rectangle([(im.size[0],0), (right, im.size[1])], fill=(255,255,255)) #right
+        return im
+
     def average(self, boxes):
         avg = [0,0]
         for box in boxes:
@@ -384,7 +427,7 @@ class Processor(object):
         return avg
 
 
-class Circle(Processor):
+class Highlight(Processor):
 
     """Processes a page by reading the file character by character and matching the OCR text until the end of the page is finished
         Current implementations breaks (keeps searching) on special characters"""
@@ -690,8 +733,8 @@ class Instructions(Processor):
             nouns = set(word.strip().lower() for word in word_file)
         #improve the list
         verbs = set(verbs - nouns)
-        verbs = set(verbs - set(["have", "is", "are", "busy"]))
-        self.verbs = set(verbs | set(["dont", "do"]))
+        verbs = set(verbs - set(["have", "is", "are", "busy", "up", "should", "was", "has", "seem", "even"]))
+        self.verbs = set(verbs | set(["dont", "draw", "take"]))
 
     def is_verb(self, word):
         return word.lower() in self.verbs
@@ -709,6 +752,8 @@ class Instructions(Processor):
         match_str = "" # for printing
         for word in page.getWords():
             word = Box(word)
+            if word.box is None:
+                continue
             if not match: #look for a verb
                 if config.VERBOSE:
                     if match_str is not "":
@@ -736,7 +781,8 @@ class Instructions(Processor):
                     match = False
                 if config.VERBOSE:
                     match_str += " " + word.getText()
-
+        #last phrase
+        if prev is not None: instructions.append(prev.strike())
         return instructions
 
         sys.exit()
@@ -745,3 +791,94 @@ class Instructions(Processor):
         print(page.getText())
 
         return []
+
+class Stockphoto(Processor):
+    def __init__(self):
+        super(Stockphoto, self).__init__()
+        self.mode = 5
+        self.font = Font()
+
+    def init(self, page):
+        super(Stockphoto, self).init(page)
+
+    def process(self, page):
+        page = super(Stockphoto, self).process(page)
+
+        #############################
+        # select image bounding box #
+        #############################
+        image = cv2.cvtColor(np.array(page.getImageOriginal()), cv2.COLOR_RGB2BGR)
+        image = cv2.resize(image, (0,0), fx=config.GUI_SCALE, fy=config.GUI_SCALE)
+
+        image_bbox = []
+        instructions = []
+
+        # define callback
+        def click(event, x, y, flags, param):
+            global prevPt
+            if(len(image_bbox) < 3):
+                # save the point where the click occurs
+                if event == cv2.EVENT_LBUTTONDOWN:
+                    prevPt = (x, y)
+                # check if it was a click, not a drag
+                elif event == cv2.EVENT_LBUTTONUP:
+                    if prevPt == (x, y):
+                        # save the coordinate
+                        image_bbox.append((int(x/config.GUI_SCALE), int(y/config.GUI_SCALE)))
+            self.update("image_bounds", image, image_bbox, config.GUI_SCALE)
+
+        # select the title region
+        cv2.namedWindow("image_bounds")
+        cv2.setMouseCallback("image_bounds", click)
+        self.display("image_bounds", image)
+        cv2.destroyWindow("image_bounds")
+
+        left = min(image_bbox[0][0], image_bbox[1][0])
+        right = max(image_bbox[0][0], image_bbox[1][0])
+        top = min(image_bbox[0][1], image_bbox[1][1])
+        bottom = max(image_bbox[0][1], image_bbox[1][1])
+
+        print("[G]: gettyimages.com")
+        print("[FS]: fotosearch.com")
+        print("[I]: istockphoto.com")
+        print("[R]: 123RF.com")
+        print("[S]: shutterstock.com")
+        print("[F]: fotolia.com")
+        print("[D]: dreamstime.com")
+        site = raw_input("Site: ")
+        id = raw_input("ID: ")
+        title = raw_input("Title: ")
+        author = raw_input("Author: ")
+        price = raw_input("Price: ")
+
+        self.font.start = (image_bbox[2][0], image_bbox[2][1])
+        self.font.current = self.font.start
+
+        instructions += self.font.phrase("#{0}".format(id))
+        self.font.current = (self.font.start[0], self.font.current[1] + self.font.scale*Font.LINEHEIGHT)
+        instructions += self.font.phrase("\"{0}\" by {1}".format(title, author))
+        self.font.current = (self.font.start[0], self.font.current[1] + self.font.scale*Font.LINEHEIGHT)
+        instructions += self.font.phrase("${0}".format(price))
+
+        self.font.start = (left, top)
+        self.font.current = self.font.start
+
+        if site == "G":
+            instructions += stockphoto.GettyImages(self.font, [left, top, right, bottom], author).get()
+        elif site == "FS":
+            instructions += stockphoto.FotoSearch(self.font, [left, top, right, bottom]).get()
+        elif site == "I":
+            instructions += stockphoto.IStock(self.font, [left, top, right, bottom]).get()
+        elif site == "R":
+            instructions += stockphoto.RF(self.font, [left, top, right, bottom]).get()
+        elif site == "S":
+            instructions += stockphoto.ShutterStock(self.font, [left, top, right, bottom]).get()
+        elif site == "F":
+            instructions += stockphoto.Fotolia(self.font, [left, top, right, bottom]).get()
+        elif site == "D":
+            instructions += stockphoto.DreamsTime(self.font, [left, top, right, bottom]).get()
+        else:
+            print("Error: Unknown site ID")
+            return []
+
+        return instructions

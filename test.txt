@@ -1,3 +1,0 @@
-Dit is test tekst. Dit is op dezelfde lijn. Drie puntjes.. en nog tekst.
-Tweede lijn zonder punt
-Derde lijn.

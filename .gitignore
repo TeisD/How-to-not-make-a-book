@@ -8,6 +8,6 @@
 *.pyc
 .DS_Store
 /experiments/
-/images/*/
+/images/
 calibration*
 test*

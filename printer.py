@@ -31,7 +31,7 @@ class Printer:
         self.ocr = None
         self.currentPosition = (0,0)
         self.convert = None
-        self.tool = 'PEN';
+        self.tool = config.TOOL;
         self.is_on = False;
         self.safe = False;
 
@@ -104,10 +104,10 @@ class Printer:
             file_path = gp.check_result(gp.gp_camera_capture(self.camera, gp.GP_CAPTURE_IMAGE, self.context))
             #print('Camera file path: {0}/{1}'.format(file_path.folder, file_path.name))
             camera_file = gp.check_result(gp.gp_camera_file_get(self.camera, file_path.folder, file_path.name, gp.GP_FILE_TYPE_NORMAL, self.context))
-            filename = time.strftime('images/%Y%m%d_%H%M%S') + '.jpg'
+            filename = config.IMAGES_FOLDER + '/' + time.strftime('%Y%m%d_%H%M%S') + '.jpg'
             gp.check_result(gp.gp_file_save(camera_file, filename))
         else:
-            filename = config.DEBUGGING_IMAGE
+            filename = config.IMAGES_FOLDER + config.DEBUGGING_IMAGE
         im = Image.open(filename).convert('RGB')
         im = im.rotate(config.ROTATION, expand=1)
         #im = im.crop((950, 400, 3200, 2300)) #hardcoded page boundaries. oeps
@@ -129,7 +129,9 @@ class Printer:
         image = cv2.cvtColor( np.array(image), cv2.COLOR_RGB2GRAY )
         image = cv2.medianBlur(image, 5)
         #circles = cv2.HoughCircles(image, cv2.HOUGH_GRADIENT,1,250,param1=100,param2=35,minRadius=15,maxRadius=30) #good for blue permanent fineliner
-        circles = cv2.HoughCircles(image, cv2.HOUGH_GRADIENT,1,250,param1=200,param2=30,minRadius=20,maxRadius=30) #alcoholstift
+        #circles = cv2.HoughCircles(image, cv2.HOUGH_GRADIENT,1,250,param1=200,param2=30,minRadius=20,maxRadius=30) #alcoholstift
+        #circles = cv2.HoughCircles(image, cv2.HOUGH_GRADIENT,1,250,param1=100,param2=35,minRadius=15,maxRadius=30) #laser
+        circles = cv2.HoughCircles(image, cv2.HOUGH_GRADIENT,1,250,param1=60,param2=35,minRadius=15,maxRadius=30) #TGP
         circles = circles[0,:]
 
         if len(circles) != len(config.CALIBRATON_POINTS):
@@ -198,9 +200,8 @@ class Printer:
             self.line(self.convertCoordinate((instruction.start[0], instruction.end[1])))
             self.line(self.convertCoordinate(instruction.start))
             self.off()
-        elif instruction.type = 'arc':
-            self.go(self.convertCoordinate(instruction.start))
-            self.arc(self.convertDistance(instruction.start, instruction.radius, instruction.quadrant))
+        elif instruction.type == 'arc':
+            self.arc(self.convertCoordinate(instruction.start), self.convertDistance(instruction.start, instruction.radius), instruction.quadrant)
 
 
     def go(self, c):
@@ -234,20 +235,23 @@ class Printer:
         self.send('G2 X{0} Y{1} I{2}'.format(self.currentPosition[0], self.currentPosition[1], r)) # make a full circle
         self.off()
 
-    def arc(self, r, quadrant):
-        if quadrant == 0:
-            self.go((self.currentPosition[0], self.currentPosition[1]-r))
+    def arc(self, start, r, quadrant):
+        if quadrant == 3:
+            self.go((start[0], start[1]+r))
             self.on()
-            self.send('G2 X{0} Y{1} I{2} J{3}'.format(self.currentPosition[0]+r, self.currentPosition[1]+r, 0, r))
+            self.send('G3 X{0} Y{1} I{2} J{3}'.format(self.currentPosition[0]-r, self.currentPosition[1]-r, 0, -r))
+        elif quadrant == 0:
+            self.go((start[0]-r, start[1]))
+            self.on()
+            self.send('G3 X{0} Y{1} I{2} J{3}'.format(self.currentPosition[0]+r, self.currentPosition[1]-r, +r, 0))
         elif quadrant == 1:
-            self.go((self.currentPosition[0]+r, self.currentPosition[1]))
-            self.send('G2 X{0} Y{1} I{2} J{3}'.format(self.currentPosition[0]-r, self.currentPosition[1]+r, -r, 0))
+            self.go((start[0], start[1]-r))
+            self.on()
+            self.send('G3 X{0} Y{1} I{2} J{3}'.format(self.currentPosition[0]+r, self.currentPosition[1]+r, 0, +r))
         elif quadrant == 2:
-            self.go((self.currentPosition[0], self.currentPosition[1]+r))
-            self.send('G2 X{0} Y{1} I{2} J{3}'.format(self.currentPosition[0]-r, self.currentPosition[1]-r, 0, -r))
-        elif quadrant == 3:
-            self.go((self.currentPosition[0]-r, self.currentPosition[1]))
-            self.send('G2 X{0} Y{1} I{2} J{3}'.format(self.currentPosition[0]+r, self.currentPosition[1]-r, r, 0))
+            self.go((start[0]+r, start[1]))
+            self.on()
+            self.send('G3 X{0} Y{1} I{2} J{3}'.format(self.currentPosition[0]-r, self.currentPosition[1]+r, -r, 0))
         self.off()
 
     def on(self):
@@ -259,6 +263,7 @@ class Printer:
             self.send('F400')
             self.send('S1000')
             self.send('M3')
+            time.sleep(0.125)
 
     def off(self):
         if(self.tool == 'PEN'):

@@ -84,7 +84,7 @@ def main(argv):
         if config.DEBUGGING:
             gui.setOriginal(page.getImageOriginal())
             gui.setProcessed(page.getImageProcessed())
-            gui.plot(instructions)
+            gui.plotList(instructions)
         else:
             printer.go((0, 250))
             printer.plotList(instructions)

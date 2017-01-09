@@ -14,18 +14,21 @@ class Gui:
         self.processed_img = Image.new('RGB', (1,1))
         plt.show()
 
-    def plot(self, instructions):
+    def plotList(self, instructions):
+        for i in instructions:
+            self.plot(i)
+
+    def plot(self, i):
         """Generate a preview on the image. Watch out! pyocr coordinates are left top(x,y) right bottom(x,y) in a bottom-left coordinate system, PIL uses a top-left system"""
         draw = ImageDraw.Draw(self.processed_img)
-        for i in instructions:
-            if i.type == "line":
-                draw.line([i.start, i.end], fill="black", width=2)
-            elif i.type == "circle":
-                draw.ellipse([i.start[0]-i.radius, i.start[1]-i.radius, i.start[0]+i.radius, i.start[1]+i.radius], outline="red")  # left top right bottom of enclosing rectangle
-            elif i.type == "rect":
-                draw.rectangle([i.start, i.end], outline="red")  # left top right bottom of enclosing rectangle
-            elif i.type == "arc":
-                draw.arc([i.start[0]-i.radius, i.start[1]-i.radius, i.start[0]+i.radius, i.start[1]+i.radius], -90+i.quadrant*90, i.quadrant*90, fill="red")
+        if i.type == "line":
+            draw.line([i.start, i.end], fill="black", width=2)
+        elif i.type == "circle":
+            draw.ellipse([i.start[0]-i.radius, i.start[1]-i.radius, i.start[0]+i.radius, i.start[1]+i.radius], outline="red")  # left top right bottom of enclosing rectangle
+        elif i.type == "rect":
+            draw.rectangle([i.start, i.end], outline="red")  # left top right bottom of enclosing rectangle
+        elif i.type == "arc":
+            draw.arc([i.start[0]-i.radius, i.start[1]-i.radius, i.start[0]+i.radius, i.start[1]+i.radius], -90+i.quadrant*90, i.quadrant*90, fill="red")
 
         self.update()
 

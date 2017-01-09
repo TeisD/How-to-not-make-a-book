@@ -4,3 +4,10 @@
 /bower_components/
 /node_modules/
 *.jpg
+*.png
+*.pyc
+.DS_Store
+/experiments/
+/images/*/
+calibration*
+test*

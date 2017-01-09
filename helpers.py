@@ -50,6 +50,9 @@ def print_modes():
     print('[3] COOKBOOK - add comments to recipes')
     print('[4] INSTRUCTIONS - blackout text, but keep instructions')
     print('[5] STOCKPHOTO - draw watermarks on pictures')
+    print('[6] TREEOFCODES - lasercut out words for a Jonathan Safran Foer effect')
+    print('[7] TVL - lasercut random words for show')
+    print('[8] TGP - listen to microphone input and mark keywords')
 
 ## TRANSFORM COORDINATES ##
 ## from http://elonen.iki.fi/code/misc-notes/affine-fit/ ##

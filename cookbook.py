@@ -8,7 +8,7 @@ from selenium.common.exceptions import TimeoutException
 
 disqus_secret_key = 'gEsLGMfIJ2Wy8Ft2nE84ANSoIJ61kLmNRQlRukgHEwfGb69ngZnRbyAhzPyeZv2G'
 disqus_public_key = '7JIzndWon2HyoEnL8LUyaAIBLaDS8323wQ3qgbbAEPh3Hn4Ywgb3Cl04kJaWhmDW'
-tags = ['comment_content', 'comment-content', 'comment-body', 'comment_body', 'comments_content', 'comments-content', 'comments-body', 'comments_body', 'field-name-comment-body']
+tags = ['comment_content', 'comment-content', 'comment-body', 'comment_body', 'comments_content', 'comments-content', 'comments-body', 'comments_body', 'field-name-comment-body', 'comment-entry']
 
 def disqus(soup, url):
     print "DISQUS"

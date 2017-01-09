@@ -6,7 +6,11 @@ import sys
 import cookbook
 import stockphoto
 import random
+import helpers
 import re
+from page import Page
+import os
+import glob
 from PIL import Image, ImageDraw
 from selenium import webdriver
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
@@ -127,6 +131,11 @@ class Box:
     def strike(self):
         return Line((self.getLeft(), self.getMiddle()), (self.getRight(), self.getMiddle()))
 
+    def stroke(self, margin = 0):
+        # temp calibration fix
+        return Rect((self.getLeft() - 2*margin, self.getTop() + margin), (self.getRight(), self.getBottom() - margin))
+        #return Rect((self.getLeft() - margin, self.getTop() + margin), (self.getRight() + margin, self.getBottom() - margin))
+
 class Character(Box):
 
     def match(self, needle):
@@ -147,7 +156,7 @@ class Font(object):
     SPACE = 10
 
     def __init__(self, scale = 1):
-        with open('fonts/hershey-occidental.json') as data_file:
+        with open('vendor/fonts/hershey-occidental.json') as data_file:
             self.font = json.load(data_file)
         self.scale = scale
         self.start = (0, 0)
@@ -510,14 +519,16 @@ class Cookbook(Processor):
         self.empty_space = []
 
     def init(self, page):
+
         im_ = page.getImageOriginal()
         super(Cookbook, self).init(page)
-
-        page.setImageOriginal(super(Cookbook, self).crop(page.getImageOriginal()))
+        page.setImageOriginal(im_)
+        page.process()
+        super(Cookbook, self).process(page)
 
         #prepare an image
-        image = cv2.cvtColor(np.array(page.getImageOriginal()), cv2.COLOR_RGB2BGR)
-        #image = cv2.resize(image, (0,0), fx=config.GUI_SCALE, fy=config.GUI_SCALE)
+        image = np.array(page.getImageProcessed())
+        image = cv2.resize(image, (0,0), fx=config.GUI_SCALE, fy=config.GUI_SCALE)
 
         prevPt = ()
         # define callback
@@ -531,8 +542,8 @@ class Cookbook(Processor):
                 elif event == cv2.EVENT_LBUTTONUP:
                     if prevPt == (x, y):
                         # save the coordinate
-                        self.title_bbox.append((x, y))
-            super(Cookbook, self).update("title_bounds", image, self.title_bbox)
+                        self.title_bbox.append((int(x/config.GUI_SCALE), int(y/config.GUI_SCALE)))
+            super(Cookbook, self).update("title_bounds", image, self.title_bbox, config.GUI_SCALE)
 
         # select the title region
         cv2.namedWindow("title_bounds")
@@ -540,35 +551,11 @@ class Cookbook(Processor):
         super(Cookbook, self).display("title_bounds", image)
         cv2.destroyWindow("title_bounds")
 
-        # set page to title crop
-        page.setImageOriginal(super(Cookbook, self).crop(page.getImageOriginal(), self.title_bbox))
-
-        def tresh(value):
-            page.lower_tresh = cv2.getTrackbarPos("lower_tresh", "tresh")
-            page.upper_tresh = cv2.getTrackbarPos("upper_tresh", "tresh")
-            page.process()
-
-        cv2.namedWindow("tresh")
-        cv2.createTrackbar("lower_tresh", "tresh", super(Cookbook, self).lower_tresh, 255, tresh)
-        cv2.createTrackbar("upper_tresh", "tresh", super(Cookbook, self).upper_tresh, 255, tresh)
-        # keep looping until the 'q' key is pressed
-        while True:
-            # display the image and wait for a keypress
-            image = np.array(page.getImageProcessed())
-            cv2.imshow("tresh", image)
-            key = cv2.waitKey(1) & 0xFF
-            # escape or space
-            if key == 27 or key == 32:
-                break
-        super(Cookbook, self).lower_tresh = cv2.getTrackbarPos("lower_tresh", "tresh")
-        super(Cookbook, self).upper_tresh = cv2.getTrackbarPos("upper_tresh", "tresh")
-        cv2.destroyWindow("tresh")
-
         #################################
         # select points for blank areas #
         #################################
-        page.setImageOriginal(im_)
-        page.process()
+        #page.setImageOriginal(im_)
+        #page.process()
         image = np.array(page.getImageProcessed())
         image = cv2.resize(image, (0,0), fx=config.GUI_SCALE, fy=config.GUI_SCALE)
         # define callback
@@ -590,7 +577,7 @@ class Cookbook(Processor):
         im_ = page.getImageOriginal()
 
         # crop the image
-        page = super(Cookbook, self).process(page)
+        super(Cookbook, self).process(page)
 
         # crop to title area and recognize title
         page.setImageOriginal(super(Cookbook, self).crop(page.getImageOriginal(), self.title_bbox))
@@ -725,11 +712,13 @@ class Instructions(Processor):
 
     def init(self, page):
         super(Instructions, self).init(page)
+        print("Loading dictionary...")
+        helpers.print_ok()
 
     def load_verbs(self):
-        with open("words_verbs.txt") as word_file:
+        with open("vendor/dictionary/words_verbs.txt") as word_file:
             verbs = set(word.strip().lower() for word in word_file)
-        with open("words_nouns.txt") as word_file:
+        with open("vendor/dictionary/words_nouns.txt") as word_file:
             nouns = set(word.strip().lower() for word in word_file)
         #improve the list
         verbs = set(verbs - nouns)
@@ -744,6 +733,8 @@ class Instructions(Processor):
             self.load_verbs()
         # crop the image
         page = super(Instructions, self).process(page)
+
+        print("Searching for instructions...")
 
         # iterate word by word
         match = False
@@ -802,6 +793,7 @@ class Stockphoto(Processor):
         super(Stockphoto, self).init(page)
 
     def process(self, page):
+        page_original = page
         page = super(Stockphoto, self).process(page)
 
         #############################
@@ -833,6 +825,8 @@ class Stockphoto(Processor):
         self.display("image_bounds", image)
         cv2.destroyWindow("image_bounds")
 
+        if(len(image_bbox) < 3): self.process(page_original)
+
         left = min(image_bbox[0][0], image_bbox[1][0])
         right = max(image_bbox[0][0], image_bbox[1][0])
         top = min(image_bbox[0][1], image_bbox[1][1])
@@ -846,19 +840,28 @@ class Stockphoto(Processor):
         print("[F]: fotolia.com")
         print("[D]: dreamstime.com")
         site = raw_input("Site: ")
-        id = raw_input("ID: ")
-        title = raw_input("Title: ")
-        author = raw_input("Author: ")
-        price = raw_input("Price: ")
+        #id = raw_input("ID: ")
+        #title = raw_input("Title: ")
+        if site == "G":
+            author = raw_input("Author: ")
+        #price = raw_input("Price: ")
+        caption = []
 
+        while(True):
+            c = raw_input("Caption (or enter to end): ")
+            if c == "":
+                break
+            else:
+                caption.append(c)
+
+        self.font.set_scale(1)
+        self.font.set_offset(0)
         self.font.start = (image_bbox[2][0], image_bbox[2][1])
         self.font.current = self.font.start
 
-        instructions += self.font.phrase("#{0}".format(id))
-        self.font.current = (self.font.start[0], self.font.current[1] + self.font.scale*Font.LINEHEIGHT)
-        instructions += self.font.phrase("\"{0}\" by {1}".format(title, author))
-        self.font.current = (self.font.start[0], self.font.current[1] + self.font.scale*Font.LINEHEIGHT)
-        instructions += self.font.phrase("${0}".format(price))
+        for c in caption:
+            instructions += self.font.phrase(c)
+            self.font.current = (self.font.start[0], self.font.current[1] + self.font.scale*Font.LINEHEIGHT)
 
         self.font.start = (left, top)
         self.font.current = self.font.start
@@ -882,3 +885,85 @@ class Stockphoto(Processor):
             return []
 
         return instructions
+
+class TreeOfCodes(Processor):
+    def __init__(self):
+        super(TreeOfCodes, self).__init__()
+        self.mode = 6
+
+    def init(self, page):
+        print("REMEMBER: The book should be processed from back to front, the first page processing loop should be canceled")
+        super(TreeOfCodes, self).init(page)
+
+    def process(self, page):
+        page = super(TreeOfCodes, self).process(page)
+        instructions = []
+
+        #take the previous page (one before last taken)
+        #prev_im = Image.open(sorted(glob.iglob('images/*.[jJ][pP][gG]'), key=os.path.getctime)[-2]).convert('RGB')
+        prev_im = Image.open(sorted(glob.iglob(config.IMAGES_FOLDER+'*.[jJ][pP][gG]'))[-2]).convert('RGB')
+        prev_im = prev_im.rotate(config.ROTATION, expand=1)
+        prev_page = Page(prev_im, page.ocr, page.lang)
+
+        page_words = [Box(w) for w in page.getWords()]
+        prev_page_words = [Box(w) for w in prev_page.getWords()]
+
+        margin = 5
+
+        """ one approach is to look for matching boxes """
+        for word in page_words:
+            if word.get() is None: continue
+            for prev_word in prev_page_words:
+                if prev_word.get() is None: continue
+                if(prev_word.getMiddle() < word.getMiddle() - margin or prev_word.getMiddle() > word.getMiddle() + margin):
+                    continue
+                if(prev_word.getLeft() < word.getLeft() - margin or prev_word.getLeft() > word.getLeft() + margin):
+                    continue
+                if(prev_word.getRight() < word.getRight() - margin or prev_word.getRight() > word.getRight() + margin):
+                    continue
+                instructions.append(word.stroke(margin))
+
+        return instructions
+
+class TVL(Processor):
+    def __init__(self):
+        super(TVL, self).__init__()
+        self.mode = 7
+
+    def init(self, page):
+        super(TVL, self).init(page)
+
+    def process(self, page):
+        page = super(TVL, self).process(page)
+        instructions = []
+
+        page_words = [Box(w) for w in page.getWords()]
+
+        margin = 5
+
+        """ one approach is to look for matching boxes """
+        for word in page_words:
+            if word.get() is None: continue
+            chance = random.randint(1,10)
+            if chance%10 == 0:
+                instructions.append(word.stroke(margin))
+
+        return instructions
+
+""" Little different implementation, as this one is running live """
+class TGP(Processor):
+    def __init__(self):
+        super(TGP, self).__init__()
+        self.mode = 8
+
+    def init(self, page):
+        super(TGP, self).init(page)
+
+    def process(self, page):
+        page = super(TGP, self).process(page)
+        instructions = []
+        return instructions
+
+    def get_text(self, page):
+        page = super(TGP, self).process(page)
+        return page.getWords()

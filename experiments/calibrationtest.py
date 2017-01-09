@@ -7,7 +7,9 @@ GUI_SCALE = 0.2
 image = cv2.imread('calibrationtest.jpg')
 image = cv2.cvtColor( np.array(image), cv2.COLOR_RGB2GRAY )
 image = cv2.medianBlur(image, 5)
-circles = cv2.HoughCircles(image, cv2.HOUGH_GRADIENT,1,250,param1=200,param2=30,minRadius=20,maxRadius=30)
+#circles = cv2.HoughCircles(image, cv2.HOUGH_GRADIENT,1,250,param1=200,param2=30,minRadius=20,maxRadius=30) #marker
+#circles = cv2.HoughCircles(image, cv2.HOUGH_GRADIENT,1,250,param1=100,param2=35,minRadius=15,maxRadius=30) #good for blue permanent fineliner
+circles = cv2.HoughCircles(image, cv2.HOUGH_GRADIENT,1,250,param1=60,param2=35,minRadius=15,maxRadius=30)
 circles = circles[0,:]
 
 #scale and show

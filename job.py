@@ -18,6 +18,9 @@ class Job:
         elif int(mode) == 3: return processor.Cookbook()
         elif int(mode) == 4: return processor.Instructions()
         elif int(mode) == 5: return processor.Stockphoto()
+        elif int(mode) == 6: return processor.TreeOfCodes()
+        elif int(mode) == 7: return processor.TVL()
+        elif int(mode) == 8: return processor.TGP()
 
     def __init__(self, name, processor, lang = 'nld'):
         """Create a new job
